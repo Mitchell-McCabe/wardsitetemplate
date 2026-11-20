@@ -25,14 +25,23 @@
 
   <main class="wrap">
     <div id="login" class="card login" hidden>
-      <div class="field">
-        <label for="pass">Passphrase</label>
-        <input id="pass" type="password" autocomplete="current-password">
-      </div>
-      <button class="btn" id="login-btn">Open</button>
-      <p class="muted" id="login-msg"></p>
+      <section id="leader-setup" hidden>
+        <h2>Set up Leaders</h2>
+        <p>Download Ward Sync, sign in to your ward in LCR, and run the first Leaders sync. After it completes, leaders sign in here with their own accounts.</p>
+      </section>
+      <form id="leader-sign-in" hidden>
+        <div class="field" id="leader-email-field">
+          <label for="leader-email">Email</label>
+          <input id="leader-email" type="email" autocomplete="username">
+        </div>
+        <div class="field">
+          <label for="pass">Password</label>
+          <input id="pass" type="password" autocomplete="current-password" required>
+        </div>
+        <button class="btn" id="login-btn" type="submit">Sign in</button>
+      </form>
+      <p class="muted" id="login-msg" role="status"></p>
       <p><a class="btn small" href="downloads/ward-sync-v2.0.3.zip" download>Download Ward Sync v2.0.3</a></p>
-      <p class="muted" style="font-size:12px">Signed in for 12 hours on this device. Ten wrong tries locks the page for 15 minutes.</p>
     </div>
 
     <div id="app" hidden>
@@ -530,7 +539,7 @@
         if (isLeaderAuthError(e)) {
           forgetLeaderToken(); pass = '';
           $('login').hidden = false; $('app').hidden = true;
-          $('login-msg').textContent = 'Your session has expired. Enter the passphrase to sign in again.';
+          $('login-msg').textContent = 'Your session has expired. Sign in again.';
         } else {
           // A network or data error does not invalidate the saved login.
           $('login').hidden = true; $('app').hidden = false;
@@ -538,30 +547,81 @@
           $('leader-load-message').textContent = 'Could not load leader data: ' + e.message;
         }
       }
-      async function loginWithPassphrase(p) {
-        const button = $('login-btn'); button.disabled = true;
-        $('login-msg').textContent = 'Checking…';
+      const invite = new URLSearchParams(location.hash.slice(1));
+      const invitationToken = invite.get('type') === 'invite' ? invite.get('access_token') : null;
+      if (invitationToken) history.replaceState(null, '', location.pathname + location.search);
+
+      async function leaderAccountRequest(path, body, token, method = 'POST') {
+        const config = window.NP_CONFIG;
+        const response = await fetch(config.supabaseUrl.replace(/\/$/, '') + path, {
+          method,
+          headers: {
+            apikey: config.supabaseAnonKey,
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: 'Bearer ' + token } : {}),
+          },
+          body: JSON.stringify(body),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.msg || data.message || data.error_description || 'Account request failed.');
+        return data;
+      }
+
+      async function showLeaderEntry() {
+        $('login').hidden = false;
         try {
-          const r = await rpc('admin_login', { p_pass: p, p_label: navigator.userAgent.slice(0, 60) });
-          if (!r || !r.ok) { $('login-msg').textContent = (r && r.error) || 'Wrong passphrase.'; return; }
-          pass = r.token; rememberLeaderToken(pass);
-          $('pass').value = ''; $('login-msg').textContent = '';
-          try { await openApp(); } catch (e) { handleLeaderLoadError(e); }
-        } catch (e) {
-          $('login-msg').textContent = 'Could not sign in: ' + e.message;
-        } finally { button.disabled = false; }
+          const ready = await rpc('leader_setup_complete');
+          $('leader-setup').hidden = ready || Boolean(invitationToken);
+          $('leader-sign-in').hidden = !ready && !invitationToken;
+          $('leader-email-field').hidden = Boolean(invitationToken);
+          $('leader-email').required = !invitationToken;
+          if (ready && pass && !invitationToken) await resumeSession();
+          if (invitationToken) {
+            $('pass').autocomplete = 'new-password';
+            $('login-btn').textContent = 'Set password';
+          }
+        } catch (error) {
+          $('login-msg').textContent = 'Could not check Leaders setup: ' + error.message;
+        }
+      }
+
+      async function signInLeader(event) {
+        event.preventDefault();
+        const button = $('login-btn');
+        button.disabled = true;
+        $('login-msg').textContent = 'Checking…';
+        let session;
+        try {
+          const password = $('pass').value;
+          const token = invitationToken || (await leaderAccountRequest('/auth/v1/token?grant_type=password', {
+            email: $('leader-email').value.trim(), password,
+          })).access_token;
+          if (!token) throw new Error('No account session was returned.');
+          session = await leaderAccountRequest('/rest/v1/rpc/leader_open_session', {}, token);
+          if (!session) throw new Error('Leaders access is unavailable.');
+          if (invitationToken) await leaderAccountRequest('/auth/v1/user', { password }, token, 'PUT');
+          pass = session;
+          rememberLeaderToken(pass);
+          $('pass').value = '';
+          $('login-msg').textContent = '';
+          await resumeSession();
+        } catch (error) {
+          if (session) await rpc('admin_logout', { p_token: session }).catch(() => {});
+          $('login-msg').textContent = 'Could not sign in: ' + error.message;
+        } finally {
+          button.disabled = false;
+        }
       }
       async function resumeSession() {
         try { await openApp(); } catch (e) { handleLeaderLoadError(e); }
       }
       $('leader-retry').addEventListener('click', resumeSession);
-      $('login-btn').addEventListener('click', () => loginWithPassphrase($('pass').value));
-      $('pass').addEventListener('keydown', e => { if (e.key === 'Enter' && !$('login-btn').disabled) loginWithPassphrase($('pass').value); });
+      $('leader-sign-in').addEventListener('submit', signInLeader);
       $('logout').addEventListener('click', async () => {
         try { await rpc('admin_logout', { p_token: pass }); } catch (e) {}
         forgetLeaderToken(); location.reload();
       });
-      if (pass) resumeSession(); else $('login').hidden = false;
+      showLeaderEntry();
 
       // ---- tabs ----
       document.querySelectorAll('#leaders-tabs > .tab[data-pane]').forEach(t => t.addEventListener('click', () => {
