@@ -102,6 +102,98 @@ async function importOne(job,id){
   return save({...src,...await readReport(src.path,{},readOverviewReport,[src.key,src.path])});
 }
 let plan=null;
+const leaderCallings = [
+  'Bishop', 'Bishopric First Counselor', 'Bishopric Second Counselor',
+  'Ward Executive Secretary', 'Ward Clerk',
+];
+
+async function readVisibleLeaderEmails(callings) {
+  if (location.origin !== 'https://lcr.churchofjesuschrist.org' ||
+      location.pathname.replace(/\/$/, '') !== '/mlt/report/member-callings') {
+    throw Error('Open the signed-in LCR Member Callings report.');
+  }
+
+  const text = element => (element?.innerText || '').replace(/\s+/g, ' ').trim();
+  const visible = element => element.getClientRects().length > 0;
+  const tables = [...document.querySelectorAll('table')].filter(visible).flatMap(table => {
+    const headers = [...(table.tHead?.rows[0]?.cells || [])].map(text);
+    const name = headers.indexOf('Name'), calling = headers.indexOf('Calling');
+    return name < 0 || calling < 0 ? [] : [{table, name, calling}];
+  });
+  if (tables.length !== 1) throw Error('Open the With Callings tab and wait for the report to load.');
+
+  const {table, name, calling} = tables[0];
+  const rows = [...table.tBodies].flatMap(body => [...body.rows])
+    .filter(visible)
+    .map(row => ({
+      calling: text(row.cells[calling]),
+      trigger: row.cells[name]?.querySelector('a,button,[role="button"]'),
+    }))
+    .filter(row => callings.includes(row.calling));
+  const cards = () => [...document.querySelectorAll('a,button,[role="button"]')]
+    .filter(node => visible(node) && text(node) === 'View Member Profile');
+
+  if (cards().length) throw Error('Close the open member card before checking leader emails.');
+  const results = [];
+  for (const role of callings) {
+    const matches = rows.filter(row => row.calling === role);
+    if (matches.length !== 1 || !matches[0].trigger) {
+      results.push({role, status: matches.length > 1 ? 'Multiple matching rows' : 'Member link not found on this page'});
+      continue;
+    }
+
+    const {trigger} = matches[0];
+    trigger.click();
+    try {
+      const deadline = Date.now() + 5000;
+      while (!cards().length && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+      const buttons = cards();
+      if (buttons.length !== 1) throw Error('Could not identify the opened member card.');
+
+      let card = buttons[0].parentElement;
+      while (card && card !== document.body && !/(?:^|\n)\s*E-mail\s*(?:\n|$)/i.test(card.innerText)) {
+        if (card.contains(table)) break;
+        card = card.parentElement;
+      }
+      const links = card && card !== document.body && !card.contains(table)
+        ? [...card.querySelectorAll('a[href^="mailto:" i]')].filter(visible) : [];
+      results.push({role, status: links.length === 1 ? 'Email found' : 'No single email link found'});
+    } finally {
+      if (cards().length) trigger.click();
+      const deadline = Date.now() + 2000;
+      while (cards().length && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      if (cards().length) throw Error('Close the member card and try again.');
+    }
+  }
+  return results;
+}
+
+const emailCheck = document.createElement('button');
+emailCheck.type = 'button';
+emailCheck.textContent = 'Check leader emails in open LCR report';
+const emailCheckLine = document.createElement('p');
+emailCheckLine.append(emailCheck);
+$('log').before(emailCheckLine);
+emailCheck.onclick = async () => {
+  busy(true);
+  $('log').replaceChildren();
+  try {
+    const tabs = await chrome.tabs.query({url: root + '/mlt/report/member-callings*'});
+    if (tabs.length !== 1) throw Error('Open one LCR With Callings report tab first.');
+    for (const result of await run(tabs[0].id, readVisibleLeaderEmails, [leaderCallings])) {
+      line($('log'), result.role + ' — ' + result.status);
+    }
+  } catch (error) {
+    line($('log'), error.message);
+  } finally {
+    busy(false);
+  }
+};
+
 function busy(lock){for(const el of document.querySelectorAll('button,input'))el.disabled=lock;$('send').disabled=lock||!plan?.rows.length;$('preview').disabled=lock||!$('date').value;}
 $('sync').onclick=async()=>{
   const chosen=[...$('choices').querySelectorAll(':checked')].map(x=>x.value);
