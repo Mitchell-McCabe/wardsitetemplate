@@ -1,0 +1,87 @@
+name: Update from Ward Template
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: 'First run only: full template commit SHA used to create this ward repo'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ward-template-update
+  cancel-in-progress: false
+
+jobs:
+  propose-update:
+    if: github.repository != 'Mitchell-McCabe/wardsitetemplate'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Apply template changes and open a pull request
+        env:
+          BASELINE_INPUT: ${{ inputs.baseline }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          marker=.ward-template-revision
+          git fetch --no-tags https://github.com/Mitchell-McCabe/wardsitetemplate.git main
+          latest="$(git rev-parse FETCH_HEAD)"
+
+          if [[ -f "$marker" ]]; then
+            baseline="$(cat "$marker")"
+            if [[ -n "$BASELINE_INPUT" && "$BASELINE_INPUT" != "$baseline" ]]; then
+              echo "::error::This ward already tracks a template revision. Leave the baseline field blank."
+              exit 1
+            fi
+          else
+            baseline="$BASELINE_INPUT"
+          fi
+
+          if [[ ! "$baseline" =~ ^[0-9a-f]{40}$ ]] || ! git merge-base --is-ancestor "$baseline" "$latest"; then
+            echo "::error::Enter the full commit SHA from the template's main history that your ward started from."
+            exit 1
+          fi
+
+          if [[ "$baseline" == "$latest" ]]; then
+            echo "This ward is already up to date."
+            exit 0
+          fi
+
+          pending="$(gh pr list --state open --base "$BASE_BRANCH" --json headRefName,url --jq '.[] | select(.headRefName | startswith("ward-template-update/")) | .url')"
+          if [[ -n "$pending" ]]; then
+            echo "::error::Review or close the existing template update first: $pending"
+            exit 1
+          fi
+
+          patch="$(mktemp)"
+          git diff --binary --no-renames "$baseline" "$latest" -- . \
+            ':(exclude).github' ':(exclude).ward-template-revision' \
+            ':(exclude)config.js' ':(exclude)CNAME' ':(exclude)downloads' \
+            ':(exclude)announcements.json' ':(exclude)calendar.ics' \
+            ':(exclude)cal' ':(exclude)e' ':(exclude)scripts/announcements.gs' > "$patch"
+
+          if [[ -s "$patch" ]] && ! git apply --3way --index "$patch"; then
+            git status --short
+            echo "::error::Template changes overlap with local edits. Resolve the listed files manually before advancing the template revision."
+            exit 1
+          fi
+
+          printf '%s\n' "$latest" > "$marker"
+          git add -- "$marker"
+          branch="ward-template-update/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git switch -c "$branch"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "Update ward template to ${latest:0:12}"
+          git push origin "HEAD:refs/heads/$branch"
+          gh pr create --base "$BASE_BRANCH" --head "$branch" \
+            --title "Update ward template to ${latest:0:12}" \
+            --body "Template changes from \`$baseline\` through \`$latest\`. Review before merging. Check whether this release requires a Supabase migration, an Actions workflow update, or a rebuilt Ward Sync ZIP."
