@@ -1,0 +1,32 @@
+name: Build Ward Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      hostname:
+        description: 'Ward website hostname (example: myward.org)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package Ward Sync
+        id: package
+        env:
+          WARD_HOSTNAME: ${{ inputs.hostname }}
+        run: |
+          python3 scripts/package_extension.py "$WARD_HOSTNAME"
+          version="$(python3 -c 'import json; print(json.load(open("extension/manifest.json"))["version"])')"
+          echo "archive=downloads/ward-sync-v${version}.zip" >> "$GITHUB_OUTPUT"
+      - name: Upload the ward-specific ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: ward-sync
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error
