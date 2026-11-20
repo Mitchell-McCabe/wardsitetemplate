@@ -133,9 +133,9 @@ revoke all on function public.leader_apply_assignments(bigint, jsonb) from publi
 grant execute on function public.leader_apply_assignments(bigint, jsonb) to service_role;
 
 create or replace function public.leader_setup_complete() returns boolean
-language sql stable security definer set search_path = pg_catalog, public as $
+language sql stable security definer set search_path = pg_catalog, public as $$
   select revision > 0 from public.leader_account_revision where singleton
-$;
+$$;
 revoke all on function public.leader_setup_complete() from public;
 grant execute on function public.leader_setup_complete() to anon, authenticated;
 
