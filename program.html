@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sacrament Meeting Program</title>
+  <meta name="description" content="The ward’s sacrament meeting program.">
+  <meta name="theme-color" content="#1b2a41">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css?v=23">
+<link rel="icon" type="image/svg+xml" href="img/ward-icon.svg?v=1">
+</head>
+<body>
+  <header class="hero compact">
+    <a class="back" href="index.html">‹ Home</a>
+    <p class="eyebrow" id="program-ward">Your Ward</p>
+    <h1>Sacrament meeting</h1>
+  </header>
+  <main class="wrap program-reader" id="program-content" aria-live="polite"><p role="status">Loading program…</p></main>
+  <script src="config.js"></script>
+  <script src="app.js?v=5"></script>
+  <script src="program.js?v=1"></script>
+  <script>NPProgram.mountReader(document.getElementById('program-content'));</script>
+  <footer class="wrap site-legal-footer">
+    <p>This independently maintained website is not an official ward website or an official website of The Church of Jesus Christ of Latter-day Saints. It is not sponsored or endorsed by the Church.</p>
+    <nav aria-label="Website policies and contact">
+      <a href="website-terms.html">Terms of Use</a>
+      <a href="website-privacy.html">Privacy Policy</a>
+      <a href="send-a-note-74b2.html">Contact the ward</a>
+    </nav>
+  </footer>
+</body>
+</html>

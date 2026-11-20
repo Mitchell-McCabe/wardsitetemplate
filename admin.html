@@ -1,0 +1,1652 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Leaders · Ward</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#1b2a41">
+  <link rel="icon" type="image/svg+xml" href="img/ward-icon.svg?v=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css?v=51">
+  <style>
+    .wrap { max-width: 1100px; }
+    .login { max-width: 380px; margin: 40px auto; }
+  </style>
+</head>
+<body>
+  <header class="hero compact">
+    <a class="back" href="index.html">‹ Home</a>
+    <p class="eyebrow">Leaders</p>
+    <h1>Attendance &amp; Members</h1>
+  </header>
+
+  <main class="wrap">
+    <div id="login" class="card login" hidden>
+      <div class="field">
+        <label for="pass">Passphrase</label>
+        <input id="pass" type="password" autocomplete="current-password">
+      </div>
+      <button class="btn" id="login-btn">Open</button>
+      <p class="muted" id="login-msg"></p>
+      <p class="muted" style="font-size:12px">Signed in for 12 hours on this device. Ten wrong tries locks the page for 15 minutes.</p>
+    </div>
+
+    <div id="app" hidden>
+      <div class="card notice error" id="leader-load-error" hidden role="alert">
+        <p id="leader-load-message"></p>
+        <button class="btn secondary" id="leader-retry" type="button">Try loading again</button>
+      </div>
+      <div class="tabs" id="leaders-tabs">
+        <button class="tab on" data-pane="overview">Overview</button>
+        <button class="tab" data-pane="attendance">Attendance</button>
+        <button class="tab" data-pane="notes">Inbox<span class="badge" id="notes-badge" hidden></span></button>
+        <button class="tab" data-pane="announcements">Ward Updates<span class="badge" id="ward-updates-badge" hidden></span></button>
+        <button class="tab" data-pane="members">Members</button>
+        <button class="tab" data-pane="sync">LCR</button>
+        <button class="tab" data-pane="settings">Settings</button>
+        <button class="tab" id="logout" style="margin-left:auto">Lock</button>
+      </div>
+
+      <!-- Overview: the quick-reference page (overview.js) -->
+      <section class="pane on" id="pane-overview">
+        <div class="inline" style="justify-content:space-between">
+          <span class="muted">A quick look at the ward — from LCR and the callings sheet.</span>
+          <button class="chip" id="ov-refresh">Refresh</button>
+        </div>
+        <div id="ov"><p class="muted">Loading…</p></div>
+      </section>
+
+      <!-- Attendance -->
+      <section class="pane" id="pane-attendance">
+        <div class="inline">
+          <div class="field" style="margin:0"><label for="date">Sunday</label><select id="date"></select></div>
+          <button class="btn small secondary" id="copy">Copy summary</button>
+          <button class="btn small secondary" id="refresh">Refresh</button>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div id="att"></div>
+        <details style="margin-top:14px">
+          <summary class="muted">Add someone who didn't check in</summary>
+          <div class="inline" style="margin-top:8px">
+            <div class="field" style="margin:0;flex:1"><label for="add-member">Member</label><select id="add-member"></select></div>
+            <div class="field" style="margin:0"><label for="add-class">Class</label><select id="add-class"></select></div>
+            <button class="btn small" id="add-btn" type="button" disabled style="align-self:flex-end">Add</button>
+          </div>
+          <p class="muted small" id="add-attendance-msg" role="status"></p>
+        </details>
+        <details id="roll-classes-settings" class="card" style="margin-top:16px">
+          <summary>Roll classes</summary>
+          <label class="switch"><input id="rc-home-visible" type="checkbox" role="switch" checked disabled><span class="knob"></span><b>Show class check-in on the homepage</b></label>
+          <p id="rc-visibility-msg" class="muted" role="status"></p>
+          <p class="muted">Sunday School is the first class of second hour. Organization Classes is the second. Check-in times use Eastern time; leave both times blank to allow check-in any time on an enabled roll.</p>
+          <div id="rc-list" style="margin-top:8px"><p class="muted">Loading…</p></div>
+          <div class="inline" style="margin-top:14px">
+            <div class="field" style="margin:0"><label for="w-day">Check-in day</label>
+              <select id="w-day"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select>
+            </div>
+            <label class="inline" style="gap:6px;align-self:flex-end;padding-bottom:10px"><input id="w-enforce" type="checkbox"> Enforce windows (untick to allow check-in any time, e.g. for testing)</label>
+          </div>
+          <div class="inline" style="margin-top:12px"><button class="btn small" id="w-save" disabled>Save roll settings</button><span class="muted" id="w-msg"></span></div>
+        </details>
+      </section>
+
+      <!-- Notes to leadership -->
+      <section class="pane" id="pane-notes">
+        <div class="inline" style="justify-content:space-between">
+          <span class="muted">Only people signed in here can see these messages.</span>
+          <label class="inline muted" style="gap:6px"><input id="notes-handled" type="checkbox"> Show handled</label>
+        </div>
+        <div id="notes" style="margin-top:4px"></div>
+      </section>
+
+      <!-- Announcements: posts (approve / edit / add) + the weekly email text -->
+      <section class="pane" id="pane-announcements">
+        <div class="inline ward-update-tabs" role="group" aria-label="Ward Updates sections">
+          <button class="chip" type="button" data-ward-update="announcements" aria-pressed="true" aria-controls="ward-announcements-admin">Announcements<span class="badge" id="posts-badge" hidden></span></button>
+          <button class="chip" type="button" data-ward-update="signup" aria-pressed="false" aria-controls="ward-extras-admin">Sign-ups<span class="badge" id="signup-pending-badge" hidden></span></button>
+          <button class="chip" type="button" data-ward-update="missionary" aria-pressed="false" aria-controls="ward-extras-admin">Missionaries<span class="badge" id="missionary-email-badge" hidden></span></button>
+            <button class="chip" type="button" data-ward-update="service" aria-pressed="false" aria-controls="ward-service-admin">Service<span class="badge" id="service-badge" hidden></span></button>
+          <button class="tab chip" type="button" data-pane="meals" data-ward-update="meals" aria-pressed="false" aria-controls="pane-meals">Meals</button>
+          <button class="tab chip" type="button" data-pane="declarations" data-ward-update="declarations" aria-pressed="false" aria-controls="pane-declarations">Declarations</button>
+          <button class="tab chip" type="button" data-pane="program" data-ward-update="program" aria-pressed="false" aria-controls="pane-program">Program</button>
+        </div>
+        <div id="missionary-admin-section" hidden>
+          <div class="field">
+            <label for="missionary-section">Missionaries</label>
+            <select id="missionary-section" aria-controls="ward-extras-admin">
+              <option value="missionary">Missionary Profiles</option>
+              <option value="moment">Missionary Moments</option>
+            </select>
+          </div>
+        </div>
+        <div id="ward-announcements-admin">
+        <div class="inline" style="justify-content:space-between">
+          <span class="muted">Posts show on the home page in date order and expire by themselves — an event disappears the day after it happens, a notice without a date after 30 days. Anything sent in from the site waits here for approval.</span>
+          <span class="inline"><button class="btn small secondary" id="post-email">Email version</button><button class="btn small" id="post-new">+ New post</button></span>
+        </div>
+        <div class="card" id="post-editor" style="margin-top:12px" hidden></div>
+        <div class="card" id="post-email-panel" style="margin-top:12px" hidden>
+          <div class="inline" style="justify-content:space-between"><h3 style="margin:0">The weekly email, from the posts</h3><button class="chip" id="pe-close">Close</button></div>
+          <p class="muted">Everything live on the home page right now, in date order. In LCR (<a href="https://lcr.churchofjesuschrist.org/mlt/messaging?lang=eng" target="_blank" rel="noopener">Send a Message</a>): paste the subject, <b>Copy formatted</b> and paste into the message — headings, bold, links and lists come through; images don't, so tick the flyers below, <b>Download selected (.zip)</b>, unzip, and drop the whole set into the Attachments box. <b>Copy plain text</b> is there if you ever need it.</p>
+          <p class="muted small" style="margin:-4px 0 10px">Every event carries <b>Add to calendar</b> links (Google, and an .ics file for Apple / Outlook), and the header points at <a href="calendar.html" target="_blank" rel="noopener">calendar.html</a>, where people subscribe to the whole ward calendar once. The files behind those are published by the Google script whenever a post changes. <button class="chip" id="pe-cal-rebuild" type="button">Rebuild calendar files</button> <span id="pe-cal-msg"></span></p>
+          <div class="field"><label for="pe-title">Subject / title</label><input id="pe-title" type="text"></div>
+          <div class="field"><label for="pe-header">Top of the email <span class="opt">(the contact-us block — same every week)</span></label><textarea id="pe-header" rows="6"></textarea></div>
+          <div class="field"><label for="pe-footer">Bottom of the email</label><textarea id="pe-footer" rows="2"></textarea></div>
+          <div class="inline"><button class="btn small secondary" id="pe-save">Save wording</button><button class="btn small" id="pe-copy-html">Copy formatted</button><button class="btn small secondary" id="pe-copy-text">Copy plain text</button><span class="muted" id="pe-msg"></span></div>
+          <h4 class="pe-title">Flyers to attach</h4>
+          <p class="muted small" style="margin:0 0 8px">Tick the ones to send, then <b>Download selected</b> gives you one .zip — it unzips to a folder, so select all in the folder and drag them onto LCR's Attachments box (or use its Browse button and pick them all at once).</p>
+          <div class="flyer-pick" id="pe-flyer-list"></div>
+          <div class="inline" style="margin-top:8px"><button class="btn small" id="pe-flyers-zip">Download selected (.zip)</button><button class="chip" id="pe-flyers-all">All</button><button class="chip" id="pe-flyers-none">None</button><button class="chip" id="pe-flyers-each">One by one instead</button></div>
+          <h4 class="pe-title">Preview</h4>
+          <div id="pe-preview" style="border:1px solid var(--line);border-radius:12px;padding:16px;background:#fff"></div>
+          <details style="margin-top:12px"><summary class="muted">Plain-text version</summary><textarea id="pe-plain" rows="18" readonly style="width:100%;margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:13px"></textarea></details>
+        </div>
+        <div id="post-queue" style="margin-top:12px"><p class="muted">Loading…</p></div>
+        <details style="margin-top:24px" id="ann-email-details">
+          <summary class="muted">This week's announcements email — the text shown under the posts on the home page</summary>
+          <div class="card ann-editor" style="margin-top:10px">
+            <div class="inline" style="justify-content:space-between">
+              <h3 style="margin:0">This week's announcements</h3>
+              <span class="muted" id="ann-meta"></span>
+            </div>
+            <p class="muted">Edits go live on the home page within a minute. Every Sunday night the new email replaces this automatically.</p>
+            <div class="field"><label for="ann-text">Text</label><textarea id="ann-text"></textarea></div>
+            <div class="field"><label>Flyers &amp; files</label><div class="ann-files" id="ann-files"></div></div>
+            <div class="inline"><button class="btn small" id="ann-save">Save</button><button class="btn small secondary" id="ann-load-json">Start from what's on the site now</button><span class="muted" id="ann-msg"></span></div>
+          </div>
+        </details>
+        </div>
+        <div id="ward-extras-admin" class="ward-extra-list" hidden></div>
+      <section id="ward-service-admin" aria-label="Service board" hidden>
+        <form id="sb-settings-form" class="card">
+          <h2>Service board settings</h2>
+          <label class="check"><input id="sb-enabled" type="checkbox"><span>Enable lending, borrowing, help, and service projects</span></label>
+          <label class="check"><input id="sb-review-listings" type="checkbox"><span>Require approval for lending, borrowing, and help listings</span></label>
+          <p class="notice">Service projects always require leader approval. New projects never appear publicly until approved below.</p>
+          <p class="muted">Changing approval settings affects new submissions. Close or hide existing listings below as needed.</p>
+          <button id="sb-settings-save" class="btn" type="submit">Save service settings</button><p id="sb-settings-msg" class="muted" role="status"></p>
+        </form>
+        <div class="card"><div class="sb-toolbar"><h3>Listings & approvals</h3><button id="sb-admin-refresh" class="chip" type="button">Refresh</button></div>
+          <div class="field"><label for="sb-admin-filter">Show</label><select id="sb-admin-filter"><option value="pending">Waiting for approval</option><option value="all">All listings</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div><p id="sb-admin-msg" class="muted" role="status"></p>
+        </div><div id="sb-admin-list" class="sb-grid"></div><nav id="sb-admin-pages" class="sb-pages" aria-label="Service review pages"></nav>
+      </section>
+      <section hidden id="pane-meals">
+        <div class="card service-panel">
+          <div class="service-panel-header">
+            <div class="service-heading"><span class="service-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v7a3 3 0 0 0 6 0V3M8 3v18M17 3c-2 1-3 4-3 8h3v10"/></svg></span><h3>Missionary meals</h3></div>
+            <label class="switch"><input type="checkbox" id="ml-enabled"><span class="knob"></span><b id="ml-enabled-label">Sign-ups are on</b></label>
+          </div>
+          <section class="service-settings-group" aria-labelledby="meal-settings-title">
+          <h4 id="meal-settings-title">Meal settings</h4>
+          <div class="meal-admin-settings">
+            <div class="field"><label for="ml-type">Missionaries</label><select id="ml-type"><option value="M">Elders</option><option value="F">Sisters</option></select></div>
+            <div class="field"><label for="ml-missionary-phone">Missionaries’ phone <span class="opt">(optional)</span></label><input id="ml-missionary-phone" type="tel" maxlength="40" inputmode="tel" placeholder="123-456-7890"></div>
+            <div class="field"><label for="ml-days">Book up to (days ahead)</label><input id="ml-days" type="number" min="7" max="120"></div>
+            <div class="field"><button class="btn" id="ml-save" type="button">Save settings</button></div>
+          </div>
+          <p class="muted" id="ml-save-msg" role="status"></p>
+          </section>
+          <section class="meal-block-settings" aria-labelledby="ml-export-title">
+            <h4 id="ml-export-title">Print the meal calendar</h4>
+            <p class="muted">Download a PDF for the missionaries, with a monthly calendar and full appointment details.</p>
+            <div class="meal-admin-settings">
+              <div class="field"><label for="ml-export-start">From</label><input id="ml-export-start" type="date"></div>
+              <div class="field"><label for="ml-export-end">Through</label><input id="ml-export-end" type="date"></div>
+              <div class="field"><button class="btn secondary" id="ml-export" type="button">Download calendar PDF</button></div>
+            </div>
+            <p class="muted" id="ml-export-msg" role="status"></p>
+          </section>
+          <section class="meal-block-settings" aria-labelledby="ml-block-title">
+            <h4 id="ml-block-title">Meal calendar</h4>
+            <p class="muted">Tap an open day to block it or a blocked day to reopen it. Tap a booked day to view or cancel the appointment.</p>
+            <div class="meal-legend"><span>🟩 Available</span><span>🟨 Booked</span><span>— Blocked</span></div>
+            <p id="ml-block-msg" role="status" class="muted"></p>
+            <div id="ml-block-calendar" aria-label="Block or reopen meal dates"></div>
+          </section>
+          <details class="meal-block-settings">
+            <summary>Book a meal for someone</summary>
+            <div class="meal-admin-settings">
+              <div class="field"><label for="ml-date">Day</label><input id="ml-date" type="date"></div>
+              <div class="field"><label for="ml-name">Name</label><input id="ml-name" type="text" maxlength="80"></div>
+              <div class="field"><label for="ml-phone">Mobile</label><input id="ml-phone" type="tel" maxlength="40" inputmode="tel" placeholder="123-456-7890"></div>
+              <div class="field"><button class="btn" id="ml-book" type="button">Book</button></div>
+            </div>
+            <div id="ml-book-msg" role="status" class="muted"></div>
+          </details>
+          <div id="meals" style="margin-top:12px"><p class="muted">Loading…</p></div>
+        </div>
+      </section>
+      <section hidden id="pane-declarations">
+        <div class="card decl-settings">
+          <div class="decl-heading"><h2>Tithing declarations</h2><button class="chip" type="button" id="decl-admin-refresh">Refresh</button></div>
+          <form id="decl-settings-form" class="decl-form-grid">
+            <div class="field"><label for="decl-admin-year">Year</label><input id="decl-admin-year" type="number" min="2020" max="2100" required></div>
+            <div class="field"><label for="decl-minutes">Interview length (minutes)</label><input id="decl-minutes" type="number" min="5" max="120" required value="15"></div>
+            <label class="check"><input id="decl-enabled" type="checkbox"><span>Open this year’s sign-ups</span></label>
+            <button class="btn" type="submit" id="decl-settings-save">Save year settings</button>
+          </form>
+          <p class="muted">Only one year can be open at a time. Previous years stay available here. All appointment times are Eastern.</p>
+          <p id="decl-admin-message" class="muted" role="status"></p>
+        </div>
+        <details class="card decl-section" id="decl-import-details">
+          <summary>Import this year’s member list</summary>
+          <p class="muted">Upload a Church Member List PDF saved from the print menu, or a CSV export with a full-name column or first and last names. PDFs are read on your device; review the extracted list before importing. Phone, email, household, and member ID are optional. A member ID distinguishes people with the same name. Reimporting updates contact details and preserves statuses and appointments.</p>
+          <div class="field"><label for="decl-csv">Member PDF or CSV file</label><input id="decl-csv" type="file" accept=".pdf,.csv,.tsv,application/pdf,text/csv,text/tab-separated-values"></div>
+          <div id="decl-mapping" class="decl-form-grid"></div>
+          <div id="decl-import-preview"></div>
+          <button id="decl-import-button" class="btn" type="button" disabled>Import members</button>
+          <p id="decl-import-msg" class="muted" role="status"></p>
+        </details>
+        <section class="card decl-section">
+          <h3>Available meeting dates and times</h3>
+          <p class="muted">Add a date and time range to generate full-length interviews. Leftover minutes are not offered. Changing the interview length affects new ranges; existing slots keep their original length.</p>
+          <form id="decl-range-form" class="decl-form-grid">
+            <div class="field"><label for="decl-range-date">Date</label><input id="decl-range-date" type="date" required></div>
+            <div class="field"><label for="decl-range-start">Start time</label><input id="decl-range-start" type="time" required></div>
+            <div class="field"><label for="decl-range-end">End time</label><input id="decl-range-end" type="time" required></div>
+            <button class="btn secondary" id="decl-range-add" type="submit">Generate appointment slots</button>
+          </form>
+          <p id="decl-range-msg" class="muted" role="status"></p><div id="decl-ranges"></div>
+        </section>
+        <section class="card decl-section">
+          <div class="decl-heading"><h3>Appointment calendar</h3><label class="decl-checkbox"><input id="decl-show-past" type="checkbox">Show past appointments</label></div>
+          <p class="muted">Tap an open time to schedule members manually. Tap a booked time to view or cancel the appointment.</p>
+          <div id="decl-admin-slots"></div>
+        </section>
+        <section class="card decl-section"><h3>Executive secretary contact requests</h3><div id="decl-contact-queue"></div></section>
+        <section class="card decl-section">
+          <h3>Members</h3>
+          <button id="decl-add-member" type="button" class="btn secondary">Add member</button>
+          <p class="muted">Color shows each member’s status. Tap a name to change status, check their appointment, or manage their details.</p>
+          <div class="field"><label for="decl-member-sort">Sort by</label><select id="decl-member-sort"><option value="status">Status</option><option value="alphabetical">Alphabetical (A–Z)</option></select></div>
+          <div id="decl-status-filters" class="chips"></div>
+          <div class="field"><label class="sr-only" for="decl-member-search">Find a member</label><input id="decl-member-search" type="search" placeholder="Find a member" autocomplete="off"></div>
+          <div id="decl-roster"></div>
+        </section>
+      </section>
+      <section hidden id="pane-program" aria-labelledby="program-editor-title">
+        <form class="card program-editor" id="program-form">
+          <h2 id="program-editor-title">Sacrament meeting program</h2>
+          <p class="muted">Prepare the order of service, then choose when members can open it.</p>
+          <section class="program-window" aria-labelledby="program-window-title">
+            <h3 id="program-window-title">Visibility settings</h3>
+            <p class="muted">The home-page button appears only on the meeting date, from the start time until the end time. Times are Eastern.</p>
+            <div class="program-window-fields">
+              <div class="field"><label for="program-date">Meeting date</label><input id="program-date" type="date" required></div>
+              <div class="field"><label for="program-start">Start time</label><input id="program-start" type="time" required></div>
+              <div class="field"><label for="program-end">End time</label><input id="program-end" type="time" required></div>
+            </div>
+            <label class="check"><input id="program-published" type="checkbox"><span>Show this program during its scheduled time</span></label>
+          </section>
+          <div class="program-editor-heading"><h3>Order of service</h3><button class="chip" id="program-reset" type="button">Use standard order</button></div>
+          <div id="program-items"></div>
+          <button class="btn secondary" id="program-add" type="button">+ Add item</button>
+          <div class="program-editor-actions"><button class="btn" id="program-save" type="submit" disabled>Save program</button><button class="btn secondary" id="program-preview-button" type="button">Preview</button></div>
+          <p class="muted" id="program-msg" role="status"></p>
+        </form>
+        <div id="program-preview" class="program-preview" hidden></div>
+      </section>
+      </section>
+
+      <!-- Without Calling: populated by the LCR Sync extension -->
+
+      <!-- Members -->
+      <section class="pane" id="pane-members">
+        <div class="inline ward-update-tabs" role="group" aria-label="Members sections">
+          <button class="chip" id="members-roster-tab" type="button" aria-pressed="true" aria-controls="members-roster">Member roster</button>
+          <button class="tab chip" data-pane="callings" type="button" aria-pressed="false" aria-controls="pane-callings">Without Calling</button>
+        </div>
+        <div id="members-roster">
+        <div class="inline" style="justify-content:space-between">
+          <span class="muted" id="members-count"></span>
+          <input class="search" id="members-search" type="search" placeholder="Filter" style="max-width:260px;padding-left:40px">
+        </div>
+        <!-- where each person is in the callings process (pipeline.js) -->
+        <div class="chips members-chips" id="members-chips"></div>
+        <div id="members"></div>
+        <details style="margin-top:16px">
+          <summary class="muted">Import / refresh members from JSON</summary>
+          <p class="muted">Paste the JSON produced by the LCR sync script (array of members). Members missing from the list are marked inactive.</p>
+          <div class="field"><textarea id="import-json" placeholder='[{"lcr_uuid":"…","name":"Last, First","display_name":"First Last","sex":"M","org":"EQ","lcr_classes":[…]}]'></textarea></div>
+          <button class="btn small" id="import-btn">Import</button>
+          <span class="muted" id="import-msg"></span>
+        </details>
+        </div>
+      <section hidden id="pane-callings" aria-label="Without Calling">
+        <div class="inline cal-top">
+          <button class="btn small" id="cal-start" type="button" disabled>▶ Start meeting</button>
+          <input class="search" id="cal-search" type="search" aria-label="Find a name" placeholder="Find a name">
+          <span class="muted small" id="cal-meta" role="status"></span>
+          <button class="chip" id="cal-refresh" type="button">Refresh</button>
+        </div>
+        <div class="chips" id="cal-filters" role="group" aria-label="Filter by calling proposal"></div>
+        <div id="cal-list"><p class="empty">Loading…</p></div>
+      </section>
+      </section>
+
+      <!-- LCR sync -->
+      <!-- Service: missionary meals (supabase/meals.sql) -->
+
+      <section class="pane" id="pane-sync">
+        <div class="card">
+          <h3 style="margin-top:0">Ward Sync extension</h3>
+          <p>Import reports from LCR or send reviewed attendance check-ins to LCR.</p>
+          <p><a class="btn small" href="downloads/ward-sync-v2.0.3.zip" download>Download Ward Sync v2.0.3</a></p>
+          <details>
+            <summary>Install in Chrome using Developer Mode</summary>
+            <ol>
+              <li>Download the ZIP and extract it to a folder you can keep.</li>
+              <li>In desktop Chrome, open the Extensions menu (the puzzle-piece icon) and choose <strong>Manage extensions</strong>.</li>
+              <li>Turn on <strong>Developer mode</strong>. If an older Ward Sync extension is installed, disable it.</li>
+              <li>Click <strong>Load unpacked</strong> and select the extracted folder containing <code>manifest.json</code>.</li>
+              <li>Sign in to <a href="https://lcr.churchofjesuschrist.org/mlt/report/class-and-quorum-attendance?lang=eng" target="_blank" rel="noopener">LCR</a>, leave Leaders open, and launch <strong>Ward Sync V2</strong> from Chrome’s Extensions menu.</li>
+            </ol>
+          </details>
+          <p>In Ward Sync, choose the reports you want and click <strong>Import selected reports</strong>. To export attendance, choose a Sunday, preview the check-ins, and confirm the matches. Leave the date blank to skip export.</p>
+          <button type="button" class="btn small secondary" id="clear-lcr-imports">Clear imported data</button>
+          <p class="muted" id="clear-lcr-status" role="status"></p>
+        </div>
+      </section>
+      <!-- Settings -->
+      <section class="pane" id="pane-settings">
+        <div class="card">
+          <h3 style="margin-top:0">Ward name</h3>
+          <p class="muted">Used everywhere on the site — the home page title, page headers, calendar exports, texts, and email drafts — instead of editing any files.</p>
+          <div class="inline">
+            <div class="field" style="margin:0"><label for="wn-name">Ward name</label><input id="wn-name" type="text" maxlength="120" placeholder="Your Ward" style="max-width:280px"></div>
+            <button class="btn small" id="wn-save" style="align-self:flex-end">Save</button><span class="muted" id="wn-msg"></span>
+          </div>
+        </div>
+
+        <form class="card" id="ward-email-form" style="margin-top:16px">
+          <h3 style="margin-top:0">Ward email</h3>
+          <p class="muted">Shown on the public contact page when saved. Leave blank to hide it.</p>
+          <div class="inline">
+            <div class="field" style="margin:0"><label for="ward-email">Ward email address</label><input id="ward-email" type="email" maxlength="254" autocomplete="off"></div>
+            <button class="btn small" id="ward-email-save" type="submit" disabled>Save</button>
+          </div>
+          <p class="muted" id="ward-email-status" role="status"></p>
+        </form>
+
+
+        <div class="card" style="margin-top:16px">
+          <h3 style="margin-top:0">Bishopric meeting request alerts</h3>
+          <p class="muted">Send the executive secretary an email with a link to the Leaders Inbox. Request details stay in the Inbox. Leave the address blank to turn email alerts off.</p>
+          <form id="b-email-form" class="inline">
+            <div class="field" style="margin:0"><label for="b-email">Email new request alerts to</label><input id="b-email" type="email" autocomplete="email" maxlength="254"></div>
+            <button class="btn small" id="b-save" type="submit" style="align-self:flex-end" disabled>Save email</button>
+          </form>
+          <p class="muted" id="b-msg" role="status"></p>
+          <details>
+            <summary>Set up Google Apps Script</summary>
+            <p>Use the site-owned Google account. <a href="scripts/bishop-email-setup.txt" target="_blank" rel="noopener">Setup instructions</a> · <a href="scripts/bishop-email.gs" target="_blank" rel="noopener">Script to copy</a></p>
+            <button class="chip" id="b-generate-key" type="button">Generate Apps Script key</button>
+            <div class="field" id="b-key-box" hidden><label for="b-worker-key">Copy this key into Script Properties</label><input id="b-worker-key" type="text" autocomplete="off" readonly></div>
+            <p class="muted" id="b-setup-msg" role="status"></p>
+          </details>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Meeting deck: one person per screen -->
+  <div class="deck" id="deck" role="dialog" aria-modal="true" aria-labelledby="wc-meeting-person" hidden>
+    <div class="deck-bar">
+      <span class="deck-pos" id="deck-pos"></span>
+      <select class="deck-jump" id="deck-jump" aria-label="Jump to a person"></select>
+      <button class="chip" id="deck-full" title="Fullscreen">⤢</button>
+      <button class="chip" id="deck-close">Close ✕</button>
+    </div>
+    <div class="deck-slide" id="deck-slide"></div>
+    <div class="deck-nav">
+      <button class="btn secondary" id="deck-prev">‹ Previous</button>
+      <button class="btn" id="deck-next">Next ›</button>
+    </div>
+  </div>
+
+  <dialog class="meal-dialog" id="leader-meal-sheet" aria-labelledby="leader-meal-title">
+    <div class="signup-card">
+      <h2 id="leader-meal-title">Meal appointment</h2>
+      <div id="leader-meal-details" aria-live="polite"></div>
+      <div class="actionbar"><button class="btn secondary" id="leader-meal-close" type="button">Close</button></div>
+    </div>
+  </dialog>
+  <dialog class="meal-dialog" id="decl-leader-dialog" aria-labelledby="decl-leader-title"><div class="signup-card">
+    <h2 id="decl-leader-title">Declaration appointment</h2><div id="decl-leader-body"></div>
+    <p class="notice error" id="decl-leader-error" hidden role="alert"></p>
+    <div class="actionbar"><button class="btn secondary" id="decl-leader-close" type="button">Close</button></div>
+  </div></dialog>
+  <dialog id="sb-admin-dialog" class="meal-dialog" aria-labelledby="sb-admin-dialog-title"><div class="signup-card"><div class="sb-dialog-heading"><h2 id="sb-admin-dialog-title">Service listing</h2><button id="sb-admin-dialog-close" type="button" class="chip">Close</button></div><p id="sb-admin-dialog-error" class="notice error" hidden role="alert"></p><div id="sb-admin-dialog-body"></div></div></dialog>
+  <dialog id="member-callings-dialog" class="meal-dialog" aria-labelledby="member-callings-title">
+    <form id="member-callings-form" class="signup-card">
+      <h2 id="member-callings-title">Current callings</h2>
+      <p class="muted">Enter one current calling per line. Clear the field and save when no callings remain. These are site records and don’t update LCR.</p>
+      <div class="field"><label for="member-callings-input">Current callings</label><textarea id="member-callings-input" rows="4" maxlength="2020"></textarea></div>
+      <p class="muted small" id="member-callings-error" role="status"></p>
+      <div class="actionbar">
+        <button class="btn" id="member-callings-save" type="submit">Save</button>
+        <button class="btn secondary" id="member-callings-close" type="button">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="config.js"></script>
+  <script src="app.js?v=10"></script>
+  <script src="callings.js?v=25"></script>
+  <script src="posts.js?v=13"></script>
+  <script src="pipeline.js?v=13"></script>
+  <script src="overview.js?v=6"></script>
+  <script src="program.js?v=2"></script>
+  <script src="program-editor.js?v=1"></script>
+  <script src="meal-pdf.js?v=1"></script>
+  <script src="declarations-shared.js?v=1"></script>
+  <script src="declarations-admin.js?v=6"></script>
+  <script src="ward-extras.js?v=8"></script>
+  <script src="service-shared.js?v=2"></script><script src="service-admin.js?v=2"></script>
+  <script>
+    (function () {
+      const { C, rpc, el, toast, fmtDate } = NP;
+      const $ = id => document.getElementById(id);
+      NP.loadSiteSettings();   // updates C.wardName in place once it resolves; used further below
+      // Save only the server-issued token. The server enforces its 12-hour lifetime.
+      function savedLeaderToken() {
+        for (const name of ['localStorage', 'sessionStorage']) {
+          try { const token = window[name].getItem('np_admin_token'); if (token) return token; } catch (e) {}
+        }
+        return '';
+      }
+      function rememberLeaderToken(token) {
+        for (const name of ['localStorage', 'sessionStorage']) {
+          try { window[name].setItem('np_admin_token', token); } catch (e) {}
+        }
+        try { sessionStorage.removeItem('np_admin_pass'); } catch (e) {}
+      }
+      function forgetLeaderToken() {
+        for (const name of ['localStorage', 'sessionStorage']) {
+          try { window[name].removeItem('np_admin_token'); window[name].removeItem('np_admin_pass'); } catch (e) {}
+        }
+      }
+      let pass = savedLeaderToken();
+      let members = [], dates = [], current = null, att = [], guests = [], notes = [];
+      // Roll classes are ward-configured (Leaders › Attendance › Roll classes) rather than hardcoded —
+      // they can change any time, so this list is loaded fresh each time the app opens.
+      let classes = [];
+      const classInfo = c => classes.find(x => x.key === c);
+      function classLabel(c) { const info = classInfo(c); return info ? info.label : c; }
+
+      // ---- auth ----
+      async function openApp() {
+        $('leader-load-error').hidden = true;
+        await rpc('admin_get_settings', { p_pass: pass });
+        $('login').hidden = true; $('app').hidden = false;
+        refreshWardUpdateBadges();
+        classes = await NP.loadClasses();
+        dates = await rpc('admin_meeting_dates', { p_pass: pass });
+        await loadMembers(); await loadLcrReports().catch(() => {}); await buildDates(); await loadAttendance(); loadNotesCount();
+        const requestedPane = location.hash.replace('#', '');
+        const update = requestedPane === 'ward-extras' ? 'signup' : requestedPane === 'moment' ? 'missionary' : requestedPane;
+        const updateTab = wardUpdateButtons.find(tab => tab.dataset.wardUpdate === update);
+        const want = requestedPane === 'callings' ? 'members' : updateTab ? 'announcements' : requestedPane;
+        const target = Array.from(document.querySelectorAll('#leaders-tabs > .tab[data-pane]')).find(tab => tab.dataset.pane === want);
+        if (target) {
+          target.click();
+          if (requestedPane === 'moment') $('missionary-section').value = 'moment';
+          if (updateTab) updateTab.click();
+          if (requestedPane === 'callings') document.querySelector('[data-pane="callings"]').click();
+        } else NPOverview.load();
+      }
+      NPProgramEditor.init({ getPass: () => pass });
+      NPDeclarationsAdmin.init({ getPass: () => pass });
+      NPServiceAdmin.init({ getPass: () => pass, setPending: count => setWardUpdateBadge('service-badge', count) });
+      const loadWardExtras = NPWardExtras.admin(() => pass, refreshMissionaryEmailBadge, refreshSignupPendingBadge);
+      NPPipeline.init({ getPass: () => pass, getMembers: () => members });
+      const loadLcrReports = force => NPLcrReports.load(pass, force);
+      NPWithoutCalling.init({
+        loadReports: loadLcrReports, getEntries: withoutCallingMembers,
+        profile: m => lcrProfileLink(m.lcr_profile, m.imported ? null : m.lcr_uuid),
+        openSync: () => document.querySelector('.tab[data-pane=sync]').click(),
+        openEditor: (m, row) => openPipeEditor(m, row),
+      });
+      const callingsTab = document.querySelector('.tab[data-pane=callings]');
+      function openMemberSection(showCallings) {
+        $('members-roster').hidden = showCallings;
+        $('pane-callings').hidden = !showCallings;
+        callingsTab.setAttribute('aria-pressed', String(showCallings));
+        $('members-roster-tab').setAttribute('aria-pressed', String(!showCallings));
+        if (showCallings) NPWithoutCalling.refresh();
+      }
+      callingsTab.addEventListener('click', () => openMemberSection(true));
+      $('members-roster-tab').addEventListener('click', () => openMemberSection(false));
+      NPOverview.init({ getPass: () => pass, getMembers: () => members, openMember: (id, row) => openMemberCalling(id, row), onPipelineChange: refreshCallingLists });
+      document.querySelector('.tab[data-pane=overview]').addEventListener('click', () => NPOverview.load());
+      $('ov-refresh').addEventListener('click', () => NPOverview.refresh());
+      function isLeaderAuthError(e) {
+        return e.status === 401 || /not authori[sz]ed|invalid session|session expired|jwt expired/i.test(e.message || '');
+      }
+      function handleLeaderLoadError(e) {
+        if (isLeaderAuthError(e)) {
+          forgetLeaderToken(); pass = '';
+          $('login').hidden = false; $('app').hidden = true;
+          $('login-msg').textContent = 'Your session has expired. Enter the passphrase to sign in again.';
+        } else {
+          // A network or data error does not invalidate the saved login.
+          $('login').hidden = true; $('app').hidden = false;
+          $('leader-load-error').hidden = false;
+          $('leader-load-message').textContent = 'Could not load leader data: ' + e.message;
+        }
+      }
+      async function loginWithPassphrase(p) {
+        const button = $('login-btn'); button.disabled = true;
+        $('login-msg').textContent = 'Checking…';
+        try {
+          const r = await rpc('admin_login', { p_pass: p, p_label: navigator.userAgent.slice(0, 60) });
+          if (!r || !r.ok) { $('login-msg').textContent = (r && r.error) || 'Wrong passphrase.'; return; }
+          pass = r.token; rememberLeaderToken(pass);
+          $('pass').value = ''; $('login-msg').textContent = '';
+          try { await openApp(); } catch (e) { handleLeaderLoadError(e); }
+        } catch (e) {
+          $('login-msg').textContent = 'Could not sign in: ' + e.message;
+        } finally { button.disabled = false; }
+      }
+      async function resumeSession() {
+        try { await openApp(); } catch (e) { handleLeaderLoadError(e); }
+      }
+      $('leader-retry').addEventListener('click', resumeSession);
+      $('login-btn').addEventListener('click', () => loginWithPassphrase($('pass').value));
+      $('pass').addEventListener('keydown', e => { if (e.key === 'Enter' && !$('login-btn').disabled) loginWithPassphrase($('pass').value); });
+      $('logout').addEventListener('click', async () => {
+        try { await rpc('admin_logout', { p_token: pass }); } catch (e) {}
+        forgetLeaderToken(); location.reload();
+      });
+      if (pass) resumeSession(); else $('login').hidden = false;
+
+      // ---- tabs ----
+      document.querySelectorAll('#leaders-tabs > .tab[data-pane]').forEach(t => t.addEventListener('click', () => {
+        document.querySelectorAll('#leaders-tabs > .tab[data-pane]').forEach(x => x.classList.toggle('on', x === t));
+        document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + t.dataset.pane));
+      }));
+
+      // ---- attendance ----
+      async function buildDates() {
+        const sel = $('date'); sel.innerHTML = '';
+        const today = NP.currentMeetingDate();
+        const all = [today, ...dates.map(d => d.meeting_date)].filter((d, i, a) => a.indexOf(d) === i).sort().reverse();
+        for (const d of all) {
+          const row = dates.find(x => x.meeting_date === d);
+          const counts = row && row.counts || {};
+          const extra = row ? ` (${classes.map(c => counts[c.key] || 0).join(' / ')})` : '';
+          sel.appendChild(el('option', { value: d }, fmtDate(d, { weekday: 'short', year: 'numeric' }) + extra));
+        }
+        current = sel.value;
+        sel.onchange = () => { current = sel.value; loadAttendance(); };
+      }
+
+      async function loadAttendance() {
+        [att, guests] = await Promise.all([rpc('admin_attendance', { p_pass: pass, p_date: current }), rpc('admin_guests', { p_pass: pass, p_date: current }).catch(() => [])]);
+        const box = $('att'); box.innerHTML = '';
+        const stats = $('stats'); stats.innerHTML = '';
+        for (const info of classes) {
+          const c = info.key;
+          const rows = att.filter(a => a.class === c);
+          const grows = guests.filter(g => g.class === c);
+          stats.appendChild(el('div', { class: 'stat' }, [el('b', {}, String(rows.length + grows.length)), el('span', {}, classLabel(c) + (grows.length ? ` (${grows.length} guest${grows.length === 1 ? '' : 's'})` : ''))]));
+          for (const org of (info.orgs || [])) {
+            stats.appendChild(el('div', { class: 'stat' }, [el('b', {}, String(rows.filter(r => r.org === org.key).length)), el('span', {}, org.label)]));
+          }
+          const synced = rows.filter(r => r.synced_to_lcr_at).length;
+          box.appendChild(el('div', { class: 'section-title' }, [el('h2', {}, classLabel(c)), el('span', { class: 'meta' }, rows.length ? `${synced}/${rows.length} in LCR` : '')]));
+          if (!rows.length && !grows.length) { box.appendChild(el('p', { class: 'empty' }, 'Nobody checked in.')); continue; }
+          const t = el('table', { class: 'grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, 'Org'), el('th', {}, 'Checked in'), el('th', {}, 'LCR'), el('th', {}, '')])));
+          const tb = el('tbody');
+          for (const r of rows) {
+            tb.appendChild(el('tr', {}, [
+              el('td', {}, r.display_name),
+              el('td', {}, r.org || ''),
+              el('td', { class: 'muted' }, new Date(r.created_at).toLocaleTimeString('en-US', { timeZone: C.timeZone, hour: 'numeric', minute: '2-digit' })),
+              el('td', {}, el('span', { class: 'pill ' + (r.synced_to_lcr_at ? 'ok' : 'off') }, r.synced_to_lcr_at ? 'synced' : 'pending')),
+              el('td', {}, el('button', { class: 'chip', onclick: async () => { if (!confirm(`Remove ${r.display_name} from ${classLabel(c)}?`)) return; await rpc('admin_set_attendance', { p_pass: pass, p_date: current, p_class: c, p_member_id: r.member_id, p_present: false }); loadAttendance(); } }, 'Remove')),
+            ]));
+          }
+          for (const g of grows) {
+            tb.appendChild(el('tr', {}, [
+              el('td', {}, [g.name + ' ', el('span', { class: 'pill' }, 'guest')]),
+              el('td', {}, '—'),
+              el('td', { class: 'muted' }, new Date(g.created_at).toLocaleTimeString('en-US', { timeZone: C.timeZone, hour: 'numeric', minute: '2-digit' })),
+              el('td', {}, el('span', { class: 'pill off', title: 'Guests are counted here only; LCR visitor totals are not sent' }, 'not sent to LCR')),
+              el('td', {}, el('button', { class: 'chip', onclick: async () => { if (!confirm(`Remove guest ${g.name}?`)) return; await rpc('admin_remove_guest', { p_pass: pass, p_guest_id: g.guest_id }); loadAttendance(); } }, 'Remove')),
+            ]));
+          }
+          t.appendChild(tb); box.appendChild(t);
+        }
+        renderAttendancePicker();
+      }
+      function renderAttendancePicker() {
+        const memberSelect = $('add-member'), classSelect = $('add-class');
+        const selectedMember = memberSelect.value, selectedClass = classSelect.value;
+        const roster = membersForLeaders().filter(m => m.active);
+        memberSelect.replaceChildren(el('option', { value: '' }, roster.length ? 'Choose a member' : 'No active members on the roster'));
+        for (const m of roster) {
+          const disabled = m.imported && !m.lcr_uuid;
+          memberSelect.appendChild(el('option', { value: m.id, disabled: disabled ? '' : null },
+            m.name + (disabled ? ' (needs a new LCR sync)' : '')));
+        }
+        memberSelect.value = roster.some(m => m.id === selectedMember && (!m.imported || m.lcr_uuid)) ? selectedMember : '';
+        classSelect.replaceChildren(...classes.map(c => el('option', { value: c.key }, c.label)));
+        if (classes.some(c => c.key === selectedClass)) classSelect.value = selectedClass;
+        updateAttendanceButton();
+      }
+      let savingAttendance = false;
+      function updateAttendanceButton() {
+        $('add-btn').disabled = savingAttendance || !current || !$('add-member').value || !$('add-class').value;
+      }
+      $('add-member').addEventListener('change', updateAttendanceButton);
+      $('add-class').addEventListener('change', updateAttendanceButton);
+      $('refresh').addEventListener('click', async () => {
+        await loadLcrReports(true).catch(() => {});
+        const selectedDate = current;
+        dates = await rpc('admin_meeting_dates', { p_pass: pass });
+        await buildDates();
+        if ([...$('date').options].some(o => o.value === selectedDate)) { $('date').value = selectedDate; current = selectedDate; }
+        await loadAttendance();
+      });
+      $('add-btn').addEventListener('click', async () => {
+        const member = membersForLeaders().find(m => m.active && m.id === $('add-member').value);
+        const date = current, cls = $('add-class').value, msg = $('add-attendance-msg');
+        if (!member || !date || !cls || savingAttendance || (member.imported && !member.lcr_uuid)) return;
+        savingAttendance = true; updateAttendanceButton(); msg.textContent = 'Saving attendance…';
+        try {
+          if (member.imported) await rpc('admin_add_imported_attendance', { p_pass: pass, p_date: date, p_class: cls, p_roster_id: member.lcr_uuid });
+          else await rpc('admin_set_attendance', { p_pass: pass, p_date: date, p_class: cls, p_member_id: member.id, p_present: true });
+          msg.textContent = 'Attendance recorded for ' + member.name + '.';
+          $('add-member').value = '';
+          try { await loadAttendance(); } catch { msg.textContent += ' Use Refresh to update the list.'; }
+        } catch (e) { msg.textContent = 'Attendance was not saved: ' + e.message; }
+        finally { savingAttendance = false; updateAttendanceButton(); }
+      });
+      $('copy').addEventListener('click', async () => {
+        const lines = [`${C.wardName || 'Ward'} — attendance for ${fmtDate(current, { year: 'numeric' })}`];
+        for (const info of classes) {
+          const c = info.key;
+          const rows = att.filter(a => a.class === c);
+          lines.push('', `${classLabel(c)} (${rows.length})`);
+          if ((info.orgs || []).length) {
+            for (const o of info.orgs) { const rr = rows.filter(r => r.org === o.key); lines.push(`  ${o.label} (${rr.length}): ${rr.map(r => r.name).join('; ')}`); }
+          } else lines.push('  ' + rows.map(r => r.name).join('; '));
+          const gg = guests.filter(g => g.class === c);
+          if (gg.length) lines.push(`  Guests / visitors (${gg.length}): ${gg.map(g => g.name).join('; ')}`);
+        }
+        try { await navigator.clipboard.writeText(lines.join('\n')); toast('Summary copied'); } catch (e) { prompt('Copy:', lines.join('\n')); }
+      });
+
+      // ---- Missionary meals: one companionship, with blocked dates.
+      const fmtDay = iso => { const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }); };
+      let svSettings = {}, mlRows = [], mlShowPast = false;
+      const mealToday = new Intl.DateTimeFormat('en-CA', { timeZone: NP.C.timeZone }).format(new Date());
+      $('ml-date').min = mealToday;
+      $('ml-export-start').min = mealToday; $('ml-export-end').min = mealToday;
+      let mealBlockInfo = null, mealBlockSaving = false;
+      async function loadMealSettings() {
+        try {
+          svSettings = Object.fromEntries((await rpc('admin_get_settings', { p_pass: pass })).map(r => [r.key, r.value]));
+          const on = (svSettings.meals_enabled || 'true') === 'true';
+          $('ml-enabled').checked = on; $('ml-enabled-label').textContent = on ? 'Sign-ups are on' : 'Sign-ups are off';
+          $('ml-days').value = svSettings.meals_days_ahead || '42';
+          if (!$('ml-export-start').value) $('ml-export-start').value = mealToday;
+          if (!$('ml-export-end').value) {
+            const end = new Date(mealToday + 'T12:00:00Z'); end.setUTCDate(end.getUTCDate() + Number(svSettings.meals_days_ahead || 42));
+            $('ml-export-end').value = end.toISOString().slice(0,10);
+          }
+          const key = JSON.parse(svSettings.meals_companionships || '[]')[0] || 'missionaries';
+          $('ml-type').value = svSettings['meals_' + key + '_gender'] === 'F' ? 'F' : 'M';
+          $('ml-missionary-phone').value = svSettings['meals_' + key + '_phone'] || '';
+          await loadMeals();
+        } catch (e) { $('ml-save-msg').textContent = 'Could not load settings: ' + e.message; }
+      }
+      async function loadBlockedDates() {
+        const box = $('ml-block-calendar');
+        try {
+          mealBlockInfo = await rpc('meals_public');
+          renderBlockCalendar();
+        } catch (e) {
+          box.replaceChildren(el('p', { class: 'notice error' }, 'Could not load calendar: ' + e.message), el('button', { class: 'btn secondary', type: 'button', onclick: loadBlockedDates }, 'Try again'));
+        }
+      }
+      function renderBlockCalendar() {
+        const box = $('ml-block-calendar'); box.replaceChildren();
+        if (!mealBlockInfo) return;
+        box.setAttribute('aria-busy', String(mealBlockSaving));
+        const blocked = new Set(mealBlockInfo.blocked || []);
+        const booked = new Map((mealBlockInfo.booked || []).map(b => [b.date, b.who]));
+        const today = mealToday, lastDay = new Date(today + 'T12:00:00Z');
+        lastDay.setUTCDate(lastDay.getUTCDate() + mealBlockInfo.days_ahead);
+        const last = lastDay.toISOString().slice(0, 10);
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        let month = today.slice(0, 7);
+        while (month <= last.slice(0, 7)) {
+          const [year, m] = month.split('-').map(Number);
+          const startDay = month === today.slice(0, 7) ? Math.max(1, Number(today.slice(8)) - new Date(today + 'T12:00:00Z').getUTCDay()) : 1;
+          const first = new Date(Date.UTC(year, m - 1, startDay)).getUTCDay();
+          const count = new Date(Date.UTC(year, m, 0)).getUTCDate();
+          const cells = days.map(d => el('span', { class: 'dow', 'aria-label': d }, d));
+          for (let n = 0; n < first; n++) cells.push(el('span', { class: 'pad', 'aria-hidden': 'true' }));
+          for (let d = startDay; d <= count; d++) {
+            const date = month + '-' + String(d).padStart(2, '0');
+            if (date < today || date > last) { cells.push(el('span', { class: 'day off' }, String(d))); continue; }
+            if (booked.has(date)) {
+              cells.push(el('button', { class: 'day taken', type: 'button', disabled: mealBlockSaving ? '' : null, 'data-meal-date': date, title: 'View appointment for ' + booked.get(date), 'aria-label': 'View or cancel appointment on ' + fmtDay(date), onclick: () => openLeaderMeal(date) }, [String(d), el('i', {}, booked.get(date).split(' ')[0])]));
+              continue;
+            }
+            const isBlocked = blocked.has(date);
+            cells.push(el('button', {
+              class: 'day ' + (isBlocked ? 'blocked' : 'open') + (date === today ? ' today' : ''), type: 'button',
+              'data-block-date': date, 'aria-pressed': String(isBlocked), disabled: mealBlockSaving ? '' : null,
+              'aria-label': (isBlocked ? 'Reopen ' : 'Block ') + fmtDay(date),
+              onclick: () => toggleBlockedDate(date, !isBlocked),
+            }, isBlocked ? [String(d), el('i', {}, '—')] : String(d)));
+          }
+          box.appendChild(el('div', { class: 'mgrid-month' }, [el('h2', { class: 'mgrid-name' }, new Date(Date.UTC(year, m - 1, 1)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' })), el('div', { class: 'mgrid meals' }, cells)]));
+          month = m === 12 ? (year + 1) + '-01' : year + '-' + String(m + 1).padStart(2, '0');
+        }
+      }
+      let leaderMealBusy = false, leaderMealDate = null;
+      function closeLeaderMeal() { if (!leaderMealBusy) $('leader-meal-sheet').close(); }
+      $('leader-meal-close').addEventListener('click', closeLeaderMeal);
+      $('leader-meal-sheet').addEventListener('cancel', e => { if (leaderMealBusy) e.preventDefault(); });
+      $('leader-meal-sheet').addEventListener('close', () => {
+        document.body.classList.remove('signup-open');
+        const day = $('ml-block-calendar').querySelector('[data-meal-date="' + leaderMealDate + '"], [data-block-date="' + leaderMealDate + '"]');
+        if (day) day.focus({ preventScroll: true });
+      });
+      async function openLeaderMeal(date) {
+        leaderMealDate = date;
+        const box = $('leader-meal-details'), close = $('leader-meal-close');
+        close.textContent = 'Close'; close.disabled = false;
+        box.replaceChildren(el('p', { role: 'status' }, 'Loading appointment…'));
+        $('leader-meal-sheet').showModal(); document.body.classList.add('signup-open');
+        try {
+          const rows = await rpc('admin_meals', { p_pass: pass, p_include_past: false });
+          if (!$('leader-meal-sheet').open || leaderMealDate !== date) return;
+          const meal = rows.find(row => row.meal_date === date && row.status === 'booked');
+          if (!meal) {
+            box.replaceChildren(el('p', {}, 'This appointment is no longer booked.'));
+            await loadMeals(); return;
+          }
+          const status = el('p', { class: 'muted', role: 'status' });
+          const cancel = el('button', { class: 'btn danger', type: 'button', onclick: async () => {
+            if (leaderMealBusy) return;
+            leaderMealBusy = true; close.disabled = true; cancel.disabled = true; cancel.textContent = 'Cancelling…';
+            try {
+              await rpc('admin_meal_status', { p_pass: pass, p_id: meal.id, p_status: 'cancelled' });
+              box.replaceChildren(el('p', { class: 'leader-meal-date' }, fmtDay(date)), el('p', { role: 'status' }, 'Appointment cancelled. This day is available again.'));
+              close.textContent = 'Done'; await loadMeals();
+            } catch (e) { status.textContent = 'Could not cancel: ' + e.message; cancel.disabled = false; cancel.textContent = 'Cancel appointment'; }
+            finally { leaderMealBusy = false; close.disabled = false; }
+          } }, 'Cancel appointment');
+          box.replaceChildren(
+            el('p', { class: 'leader-meal-date' }, fmtDay(date)),
+            el('p', { class: 'leader-meal-name' }, meal.name),
+            el('p', {}, el('a', { href: 'tel:' + String(meal.phone).replace(/[^0-9+]/g, '') }, meal.phone)),
+            meal.notes ? el('p', { class: 'leader-meal-notes' }, meal.notes) : el('p', { class: 'muted' }, 'No additional notes.'),
+            el('p', { class: 'muted' }, 'Cancelling makes this day available for another household.'), cancel, status,
+          );
+        } catch (e) { box.replaceChildren(el('p', { class: 'notice error', role: 'alert' }, 'Could not load appointment: ' + e.message)); }
+      }
+      async function toggleBlockedDate(date, blocked) {
+        if (mealBlockSaving) return;
+        mealBlockSaving = true; renderBlockCalendar();
+        const msg = $('ml-block-msg'); msg.textContent = 'Saving…';
+        try {
+          await rpc('admin_meal_block_date', { p_pass: pass, p_date: date, p_blocked: blocked });
+          msg.textContent = fmtDay(date) + (blocked ? ' is blocked.' : ' is available.');
+        } catch (e) { msg.textContent = e.message; }
+        finally {
+          mealBlockSaving = false; await loadBlockedDates();
+          const button = $('ml-block-calendar').querySelector('[data-block-date="' + date + '"]');
+          if (button) button.focus({ preventScroll: true });
+        }
+      }
+      async function loadMeals() {
+        const box = $('meals');
+        try { mlRows = await rpc('admin_meals', { p_pass: pass, p_include_past: mlShowPast }); }
+        catch (e) { box.innerHTML = ''; box.appendChild(el('p', { class: 'notice' }, /admin_meals/.test(e.message) ? 'Run supabase/meals.sql in Supabase first.' : 'Could not load: ' + e.message)); return; }
+        renderMeals();
+        await loadBlockedDates();
+      }
+      function renderMeals() {
+        const box = $('meals'); box.innerHTML = '';
+        box.appendChild(el('h4', { class: 'service-reservations-title' }, 'Meal reservations'));
+        const open = mlRows.filter(m => m.status === 'booked'), rest = mlRows.filter(m => m.status !== 'booked');
+        if (!mlRows.length) box.appendChild(el('p', { class: 'muted' }, 'No meals booked yet.'));
+        const st = (m, to) => async () => { try { await rpc('admin_meal_status', { p_pass: pass, p_id: m.id, p_status: to }); await loadMeals(); } catch (e) { toast('Failed: ' + e.message, 4000); } };
+        const row = m => el('div', { class: 'dn-card ' + (m.status === 'booked' ? '' : 'done') }, [
+          el('div', { class: 'dn-name' }, [fmtDay(m.meal_date), el('span', { class: 'pill ' + (m.status === 'booked' ? 'ok' : 'off') }, m.status)]),
+          el('div', { class: 'dn-meta' }, [el('b', {}, m.name), ' · ', el('a', { href: 'tel:' + String(m.phone).replace(/\D/g, '') }, m.phone), m.companion ? ' · with ' + m.companion : '', m.notes ? ' · “' + m.notes + '”' : '']),
+          el('div', { class: 'dn-actions' }, [
+            m.status === 'booked' ? el('button', { class: 'chip ok', type: 'button', onclick: st(m, 'done') }, 'Done') : el('button', { class: 'chip', type: 'button', onclick: st(m, 'booked') }, 'Back to booked'),
+            m.status === 'booked' ? el('button', { class: 'chip', type: 'button', onclick: () => { if (confirm('Cancel this meal? The day opens up again.')) st(m, 'cancelled')(); } }, 'Cancel') : null,
+            el('button', { class: 'chip danger', type: 'button', onclick: async () => { if (!confirm('Delete this booking for good?')) return; try { await rpc('admin_meal_delete', { p_pass: pass, p_id: m.id }); await loadMeals(); } catch (e) { toast('Failed: ' + e.message, 4000); } } }, 'Delete'),
+          ]),
+        ]);
+        open.forEach(m => box.appendChild(row(m)));
+        if (rest.length) { box.appendChild(el('h4', { class: 'post-month' }, 'Done / cancelled')); rest.forEach(m => box.appendChild(row(m))); }
+        box.appendChild(el('p', { class: 'muted small' }, el('button', { class: 'chip tiny', type: 'button', onclick: () => { mlShowPast = !mlShowPast; loadMeals(); } }, mlShowPast ? 'Hide older' : 'Show older meals')));
+      }
+      $('ml-enabled').addEventListener('change', async () => {
+        const on = $('ml-enabled').checked;
+        try { await rpc('admin_set_setting', { p_pass: pass, p_key: 'meals_enabled', p_value: on ? 'true' : 'false' }); svSettings.meals_enabled = on ? 'true' : 'false'; $('ml-enabled-label').textContent = on ? 'Sign-ups are on' : 'Sign-ups are off'; toast(on ? 'Meal sign-ups are on' : 'Meal sign-ups are off — meals.html says so'); }
+        catch (e) { $('ml-enabled').checked = !on; toast('Not saved: ' + e.message, 4000); }
+      });
+      $('ml-save').addEventListener('click', async () => {
+        const msg = $('ml-save-msg'), button = $('ml-save'); msg.textContent = 'Saving…'; button.disabled = true;
+        try {
+          const days = parseInt($('ml-days').value, 10); if (isNaN(days) || days < 7 || days > 120) throw new Error('Booking window must be 7–120 days.');
+          await rpc('admin_meal_settings', { p_pass: pass, p_gender: $('ml-type').value, p_phone: $('ml-missionary-phone').value.trim(), p_days: days });
+          msg.textContent = 'Saved.'; await loadMealSettings();
+        } catch (e) { msg.textContent = 'Not saved: ' + e.message; }
+        finally { button.disabled = false; }
+      });
+      $('ml-book').addEventListener('click', async () => {
+        const msg = $('ml-book-msg'); msg.textContent = 'Booking…'; $('ml-book').disabled = true;
+        try {
+          const r = await rpc('meals_book', { p_date: $('ml-date').value || null, p_name: $('ml-name').value.trim(), p_phone: $('ml-phone').value.trim(), p_notes: null, p_website: '' });
+          msg.textContent = 'Booked. They can cancel using the phone number entered for this appointment.';
+          ['ml-name', 'ml-phone', 'ml-date'].forEach(id => { $(id).value = ''; }); await loadMeals();
+        } catch (e) { msg.textContent = e.message; }
+        finally { $('ml-book').disabled = false; }
+      });
+      $('ml-export').addEventListener('click', async () => {
+        const button = $('ml-export'), msg = $('ml-export-msg');
+        const start = $('ml-export-start').value, end = $('ml-export-end').value;
+        try { NPMealPdf.rangeDates(start, end); if (start < mealToday) throw new Error('Choose today or a future start date.'); }
+        catch (e) { msg.textContent = e.message; return; }
+        button.disabled = true; msg.textContent = 'Preparing PDF…';
+        try {
+          const [bookings, blocked, rows] = await Promise.all([
+            rpc('admin_meals', { p_pass: pass, p_include_past: false }),
+            rpc('admin_meal_blocked_dates', { p_pass: pass }),
+            rpc('admin_get_settings', { p_pass: pass }),
+          ]);
+          const settings = Object.fromEntries(rows.map(r => [r.key, r.value]));
+          const key = JSON.parse(settings.meals_companionships || '[]')[0] || 'missionaries';
+          const bookingEndDate = new Date(mealToday + 'T12:00:00Z'); bookingEndDate.setUTCDate(bookingEndDate.getUTCDate() + Number(settings.meals_days_ahead || 42));
+          const bytes = await NPMealPdf.build({ start, end, bookings, blocked, bookingEnd: bookingEndDate.toISOString().slice(0,10), wardName: settings.ward_name || C.wardName, missionaries: settings['meals_' + key + '_gender'] === 'F' ? 'Sisters' : 'Elders', timeZone: C.timeZone });
+          NPMealPdf.download(bytes, start, end);
+          msg.textContent = 'PDF downloaded. Open it to print or share with the missionaries.';
+        } catch (e) { msg.textContent = 'Could not export: ' + e.message; }
+        finally { button.disabled = false; }
+      });
+      document.querySelector('.tab[data-pane=meals]').addEventListener('click', loadMealSettings);
+
+      // ---- members ----
+      async function loadMembers() {
+        members = await rpc('admin_members', { p_pass: pass });
+        renderMembers(); renderAttendancePicker();
+      }
+      let pipelineReady = false;
+      let memberLoad = null;
+      async function loadMemberDetails() {
+        if (memberLoad) return memberLoad;
+        memberLoad = Promise.allSettled([
+          NPPipeline.load(true).then(() => { pipelineReady = !NPPipeline.data().unavailable; renderMembers(); }),
+          loadLcrReports(true).finally(() => { renderMembers(); renderAttendancePicker(); }),
+          loadCurrentCallings(),
+        ]).finally(() => { memberLoad = null; });
+        return memberLoad;
+      }
+      function lcrProfileLink(input, uuid) {
+        const root = 'https://lcr.churchofjesuschrist.org';
+        const isUuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+        if (input) {
+          try {
+            const url = new URL(input);
+            if (url.origin === root && /^\/(?:mlt\/)?records\/member-profile\/[0-9a-f-]{36}\/?$/i.test(url.pathname)) {
+              url.search = '?lang=eng'; url.hash = ''; return url.href;
+            }
+          } catch {}
+        }
+        return isUuid.test(uuid || '') ? root + '/mlt/records/member-profile/' + uuid + '?lang=eng' : '';
+      }
+      function leadershipRoster() {
+        const sheet = NPLcrReports.data().lcr_test_members;
+        const report = NPLcrReports.data().lcr_without_calling;
+        const eligible = report?.updated_by === 'LCR Overview test extension' ? report.rows : [];
+        const base = sheet?.updated_by === 'LCR Overview test extension' && sheet.rows.length ? sheet.rows.map(([name, sex, cls, key, first, second, profile], i) => {
+          const legacy = String(cls || '').split(', ').filter(Boolean);
+          const isKnownOrg = label => /^(Elders Quorum|Relief Society)(?:\b|$)/i.test(label);
+          const schoolCandidates = legacy.filter(label => !isKnownOrg(label));
+          const school = first || (schoolCandidates.length === 1 ? schoolCandidates[0] : '');
+          const orgLabel = second || legacy.find(isKnownOrg) || '';
+          const org = /^Elders Quorum\b/i.test(orgLabel) ? 'EQ' : /^Relief Society\b/i.test(orgLabel) ? 'RS' : orgLabel;
+          const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(key || '') ? key : null;
+          return { id: 'imported:' + (uuid || i), lcr_uuid: uuid, imported: true, name, sex, org, active: true, class_label: school, lcr_profile: profile };
+        }) : members.slice();
+        const byKey = new Map(base.filter(m => m.lcr_uuid).map(m => [m.lcr_uuid, m]));
+        const byProfile = new Map(base.flatMap(m => {
+          const profile = lcrProfileLink(m.lcr_profile, m.imported ? null : m.lcr_uuid);
+          return profile ? [[new URL(profile).pathname.split('/').at(-1).toLowerCase(), m]] : [];
+        }));
+        const without = [];
+        for (const [name, key, profile] of eligible) {
+          const validProfile = lcrProfileLink(profile);
+          const profileKey = validProfile ? new URL(validProfile).pathname.split('/').at(-1).toLowerCase() : '';
+          let m = byKey.get(key) || (profileKey && byProfile.get(profileKey));
+          if (!m && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(key)) {
+            m = { id: 'imported:' + key, lcr_uuid: key, lcr_profile: profile, imported: true, active: true, name };
+            base.push(m); byKey.set(key, m);
+          }
+          if (m) without.push(m);
+        }
+        return { all: base.sort((a,b) => a.name.localeCompare(b.name)), without: [...new Map(without.map(m => [m.id, m])).values()] };
+      }
+      function membersForLeaders() { return leadershipRoster().all; }
+      function withoutCallingMembers() {
+        return leadershipRoster().without.map(m => {
+          const [last, given] = m.name.split(/,\s*/, 2);
+          return { ...m, display_name: m.display_name || (given ? given + ' ' + last : m.name) };
+        }).sort((a, b) => a.display_name.localeCompare(b.display_name));
+      }
+      const currentCallings = new Map();
+      let callingsLoaded = false;
+      let editingMember = null;
+      async function loadCurrentCallings() {
+        try {
+          const rows = await rpc('admin_current_callings', { p_pass: pass });
+          currentCallings.clear();
+          for (const r of rows) currentCallings.set(r.imported ? 'imported:' + r.roster_id : r.roster_id, r.callings);
+          callingsLoaded = true;
+        } catch { callingsLoaded = false; }
+        renderMembers();
+      }
+      function currentCallingsCell(member) {
+        const names = currentCallings.get(member.id);
+        return el('div', { class: 'member-current-callings' }, [
+          names?.length ? el('ul', {}, names.map(name => el('li', {}, name))) : null,
+          el('button', { class: 'chip', type: 'button', onclick: () => openCurrentCallings(member),
+            disabled: member.imported && !member.lcr_uuid ? '' : null }, names?.length ? 'Edit' : 'Record calling'),
+        ]);
+      }
+      async function openCurrentCallings(member) {
+        if (!callingsLoaded) await loadCurrentCallings();
+        if (!callingsLoaded) { toast('Could not load current callings. Try again.'); return; }
+        editingMember = member;
+        $('member-callings-title').textContent = 'Current callings — ' + member.name;
+        $('member-callings-input').value = (currentCallings.get(member.id) || []).join('\n');
+        $('member-callings-error').textContent = '';
+        $('member-callings-dialog').showModal();
+        $('member-callings-input').focus();
+      }
+      $('member-callings-close').addEventListener('click', () => $('member-callings-dialog').close());
+      $('member-callings-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        if (!editingMember) return;
+        const member = editingMember, button = $('member-callings-save'), msg = $('member-callings-error');
+        const callings = [...new Set($('member-callings-input').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean))].sort();
+        if (callings.length > 20 || callings.some(s => s.length > 100)) { msg.textContent = 'Use up to 20 lines, with at most 100 characters per line.'; return; }
+        button.disabled = true; msg.textContent = 'Saving…';
+        try {
+          await rpc('admin_save_current_callings', { p_pass: pass, p_roster_id: member.imported ? member.lcr_uuid : member.id, p_imported: !!member.imported, p_callings: callings });
+          currentCallings.set(member.id, callings);
+          $('member-callings-dialog').close(); renderMembers();
+        } catch (err) { msg.textContent = 'Could not save: ' + err.message; }
+        finally { button.disabled = false; }
+      });
+      function renderMembers() {
+        const q = $('members-search').value.trim().toLowerCase();
+        const box = $('members'); box.innerHTML = '';
+        const roster = membersForLeaders();
+        const active = roster.filter(m => m.active).length;
+        // the process chips (only once the callings data is in — the counts need it)
+        const chips = $('members-chips'); chips.innerHTML = '';
+        const stageOf = new Map(pipelineReady ? roster.map(m => { try { return [m.id, NPPipeline.stageFor(m)]; } catch (e) { console.error(e); return [m.id, null]; } }) : []);
+        const group = NPPipeline.GROUPS.find(g => g[0] === memberFilter) || NPPipeline.GROUPS[0];
+        if (pipelineReady) for (const [key, label, test] of NPPipeline.GROUPS) {
+          const n = roster.filter(m => test(m, stageOf.get(m.id))).length;
+          if (!n && key !== 'all') continue;   // an empty stage isn't worth a chip
+          chips.appendChild(el('button', { class: 'chip' + (memberFilter === key ? ' on' : ''), type: 'button', onclick: () => { memberFilter = key; renderMembers(); } }, key === 'all' ? label : `${label} · ${n}`));
+        }
+        const shown = roster.filter(m => (!q || m.name.toLowerCase().includes(q)) && (!pipelineReady || group[2](m, stageOf.get(m.id))));
+        $('members-count').textContent = `${active} active · ${roster.length - active} inactive` + (memberFilter !== 'all' || q ? ` · showing ${shown.length}` : '');
+        // copy what's showing as "name — calling — who contacts", one per line (everyone with something in progress)
+        const lines = pipelineReady ? NPPipeline.copyLines(shown, stageOf) : [];
+        if (lines.length) chips.appendChild(el('button', { class: 'chip copy-list', type: 'button', title: 'Copy these as one line per person: name — calling — who contacts', onclick: async e => {
+          const text = lines.join('\n');
+          try { await navigator.clipboard.writeText(text); toast(`Copied ${lines.length} line${lines.length === 1 ? '' : 's'}`); }
+          catch (err) { window.prompt('Copy this list', text); }
+        } }, `Copy list · ${lines.length}`));
+        // active / inactive comes from the weekly LCR sync (the roster refresh deactivates anyone LCR no longer lists) — no hand switch here
+        // "LCR class" here is whichever roll class has orgTypeIds set (Leaders › Attendance › Roll classes) — if none do, the column is blank
+        const lcrClass = classes.find(c => (c.orgTypeIds || []).length);
+        const t = el('table', { class: 'grid members-grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, 'Org'), el('th', {}, 'Sunday School'), el('th', {}, 'Current callings'), el('th', {}, 'Proposals')])));
+        const tb = el('tbody');
+        for (const m of shown) {
+          const ss = lcrClass ? (m.lcr_classes || []).find(c => lcrClass.orgTypeIds.includes(c.orgTypeId) && !/^(Elders Quorum|Relief Society)\b/i.test(c.orgName || '')) : null;
+          const profile = lcrProfileLink(m.lcr_profile, m.imported ? null : m.lcr_uuid);
+          const school = m.class_label || ss?.orgName || '';
+          const compactAssignment = [school, m.org].filter(Boolean).join(' · ');
+          const tr = el('tr', { 'data-member': m.id }, [
+            el('td', {}, [
+              m.name,
+              compactAssignment ? el('div', { class: 'muted small members-assignment' }, compactAssignment) : null,
+              profile ? el('div', {}, el('a', { class: 'muted small', href: profile, target: '_blank', rel: 'noopener noreferrer' }, 'View in LCR ↗')) : null,
+            ]),
+            el('td', {}, m.org || ''),
+            el('td', { class: 'muted' }, school || '—'),
+            el('td', {}, currentCallingsCell(m)),
+            el('td', { class: 'pipe-td' }, safeCell(() => pipelineCell(m))),
+          ]);
+          tb.appendChild(tr);
+        }
+        t.appendChild(tb); box.appendChild(t);
+        if (!shown.length) box.appendChild(el('p', { class: 'empty' }, roster.length ? 'Nobody matches.' : 'No members on the list yet. Run the LCR sync to import the ward roster.'));
+        if (NPPipeline.data().unavailable) chips.appendChild(el('span', { class: 'notice', style: 'margin:0' }, 'Could not load existing proposals. Opening a proposal retries the connection.'));
+      }
+      // One row with unexpected data should not take down the list.
+      function safeCell(make) { try { return make(); } catch (e) { console.error(e); return el('span', { class: 'pill warn', title: String(e && e.message || e) }, '!'); } }
+      let memberFilter = 'all';
+      // Always render the action. Resolve the current record before opening the editor.
+      function pipelineCell(m) {
+        return NPPipeline.cell(m, async row => {
+          await NPPipeline.load(!pipelineReady);
+          pipelineReady = !NPPipeline.data().unavailable;
+          // A new proposal starts a new record even when another is already open.
+          openPipeEditor(m, row || null);
+        });
+      }
+      function openPipeEditor(m, row) {
+        document.querySelectorAll('.pipe-modal').forEach(x => x.remove());
+        const close = changed => { modal.remove(); document.removeEventListener('keydown', onKey); if (changed) { refreshCallingLists(); NPOverview.refresh(); } };
+        const onKey = e => { if (e.key === 'Escape') close(false); };
+        const modal = el('div', { class: 'pipe-modal', onclick: e => { if (e.target === modal) close(false); } }, el('div', { class: 'pipe-card' }, [
+          el('h3', {}, [m.display_name || m.name, el('span', { class: 'muted' }, row ? ' · ' + (row.calling || row.release_from) : ' · calling')]),
+          NPPipeline.editor(m, row, close),
+        ]));
+        document.body.appendChild(modal); document.addEventListener('keydown', onKey);
+      }
+      // Leaders › Overview → this member's editor
+      function refreshCallingLists() {
+        const { loaded, unavailable } = NPPipeline.data();
+        pipelineReady = loaded && !unavailable;
+        renderMembers(); renderAttendancePicker();
+        if ($('pane-members').classList.contains('on') && !$('pane-callings').hidden) NPWithoutCalling.render();
+      }
+      function openMemberCalling(memberId, row) {
+        const m = membersForLeaders().find(x => x.id === memberId) ||
+          (row ? { id: memberId, name: row.name, display_name: row.name, lcr_uuid: row.lcr_uuid, imported: row.imported_roster } : null);
+        if (!m) { toast('Not on the members list'); return; }
+        document.querySelector('.tab[data-pane=members]').click();
+        $('members-search').value = m.name; memberFilter = 'all'; renderMembers(); openPipeEditor(m, row || NPPipeline.openFor(m));
+      }
+      $('clear-lcr-imports').addEventListener('click', async () => {
+        if (!confirm('Clear the extension’s LCR imports and the calling records created for those imported members?')) return;
+        const button = $('clear-lcr-imports'), status = $('clear-lcr-status');
+        button.disabled = true;
+        try {
+          await rpc('admin_clear_lcr_extension_data', { p_pass: pass });
+          await NPOverview.refresh();
+          refreshCallingLists();
+          status.textContent = 'Imported data cleared.';
+        } catch (e) { status.textContent = 'Could not clear imported data: ' + e.message; }
+        finally { button.disabled = false; }
+      });
+      document.addEventListener('ward-lcr-test-roster-updated', async () => { await loadLcrReports(true); refreshCallingLists(); });
+      $('members-search').addEventListener('input', renderMembers);
+      // callings move along from the Overview too — redraw the list each time the tab opens
+      document.querySelector('.tab[data-pane=members]').addEventListener('click', () => { openMemberSection(false); renderMembers(); loadMemberDetails(); });
+
+      // ---- inbox: meeting requests for the Bishop ----
+      let meetings = [];
+      async function loadNotesCount() {
+        try { const [requests, contacts] = await Promise.all([rpc('admin_notes_count', { p_pass: pass }), rpc('admin_ward_contacts', { p_pass: pass, p_include_handled: false }).catch(() => [])]); const n = Number(requests || 0) + contacts.length; $('notes-badge').textContent = n; $('notes-badge').hidden = !n; } catch (e) {}
+        refreshAnnouncementsPendingBadge();
+      }
+      async function loadNotes() {
+        const box = $('notes'); box.innerHTML = '';
+        const incl = $('notes-handled').checked;
+        try { meetings = await rpc('admin_meeting_requests', { p_pass: pass, p_include_handled: incl }); }
+        catch (e) { box.appendChild(el('p', { class: 'notice' }, 'Run supabase/inbox.sql first (' + e.message + ').')); return; }
+        const fmtWhen = iso => new Date(iso).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+        box.appendChild(el('h3', { class: 'inbox-title' }, 'Meeting Requests'));
+        if (!meetings.length) box.appendChild(el('p', { class: 'empty' }, incl ? 'No requests yet.' : 'No open requests.'));
+        for (const m of meetings) {
+          box.appendChild(el('div', { class: 'note' + (m.handled_at ? ' handled' : '') }, [
+            el('div', { class: 'head' }, [
+              el('span', { class: 'pill ' + (m.temple_recommend ? 'recommend' : '') }, m.temple_recommend ? 'Temple recommend interview' : 'Meeting with the Bishop'),
+              el('span', { class: 'muted', style: 'margin-left:auto;font-size:12px' }, fmtWhen(m.created_at)),
+            ]),
+            el('div', { class: 'msg' }, [el('b', {}, m.name), ' · ', el('a', { href: 'tel:' + m.phone.replace(/\D/g, '') }, m.phone), ' · ', el('a', { href: 'mailto:' + m.email }, m.email)]),
+            m.note ? el('div', { class: 'who' }, '“' + m.note + '”') : null,
+            m.handled_at ? el('div', { class: 'who' }, 'Handled' + (m.handled_by ? ' by ' + m.handled_by : '')) : null,
+            el('div', { class: 'actions' }, [
+              el('button', { class: 'chip', onclick: async () => { await rpc('admin_meeting_handled', { p_pass: pass, p_id: m.id, p_handled: !m.handled_at, p_by: null }); loadNotes(); } }, m.handled_at ? 'Mark as open' : 'Mark scheduled'),
+              el('button', { class: 'chip', onclick: async () => { if (!confirm(`Delete the request from ${m.name}?`)) return; await rpc('admin_meeting_delete', { p_pass: pass, p_id: m.id }); loadNotes(); } }, 'Delete'),
+            ]),
+          ]));
+        }
+        box.appendChild(el('h3', { class: 'inbox-title' }, 'Contact form messages'));
+        try {
+          const contacts = await rpc('admin_ward_contacts', { p_pass: pass, p_include_handled: incl });
+          if (!contacts.length) box.appendChild(el('p', { class: 'empty' }, 'No contact messages.'));
+          for (const contact of contacts) {
+            const feedback = el('p', { role: 'status' });
+            box.appendChild(el('div', { class: 'note' + (contact.handled ? ' handled' : '') }, [
+              el('div', { class: 'head' }, [el('b', {}, contact.name), el('span', { class: 'muted' }, fmtWhen(contact.created_at))]),
+              el('p', {}, el('a', { href: 'mailto:' + encodeURIComponent(contact.email) }, contact.email)),
+              el('p', { style: 'white-space:pre-wrap;overflow-wrap:anywhere' }, contact.message),
+              el('button', { class: 'chip', type: 'button', onclick: async event => {
+                const button = event.currentTarget;
+                button.disabled = true;
+                try { await rpc('admin_ward_contact_handle', { p_pass: pass, p_id: contact.id, p_handled: !contact.handled }); await loadNotes(); }
+                catch (error) { feedback.textContent = error.message; button.disabled = false; }
+              } }, contact.handled ? 'Reopen' : 'Mark handled'),
+              feedback,
+            ]));
+          }
+        } catch (error) {
+          box.appendChild(el('p', { class: 'notice' }, 'Could not load contact messages. ' + error.message));
+        }
+        loadNotesCount();
+      }
+      $('notes-handled').addEventListener('change', loadNotes);
+      document.querySelector('.tab[data-pane=notes]').addEventListener('click', loadNotes);
+
+      // ---- announcements editor ----
+      let ann = null;  // current row from the database (or null)
+      function renderAnnFiles() {
+        const box = $('ann-files'); box.innerHTML = '';
+        const all = [...(ann && ann.images || []).map(x => ({ ...x, _t: 'images' })), ...(ann && ann.files || []).map(x => ({ ...x, _t: 'files' }))];
+        if (!all.length) { box.appendChild(el('span', { class: 'muted' }, 'None attached.')); return; }
+        for (const f of all) box.appendChild(el('span', { class: 'chip' }, [
+          el('a', { href: f.path, target: '_blank', rel: 'noopener' }, f.name || f.path.split('/').pop()),
+          el('button', { class: 'x', title: 'Remove from the site', style: 'border:0;background:none;cursor:pointer', onclick: () => { ann[f._t] = ann[f._t].filter(x => x.path !== f.path); renderAnnFiles(); } }, '×'),
+        ]));
+      }
+      async function loadAnnouncements() {
+        $('ann-msg').textContent = '';
+        try {
+          const rows = await rpc('current_announcements');
+          ann = rows && rows[0] ? { id: rows[0].id, text: rows[0].text || '', images: rows[0].images || [], files: rows[0].files || [], sent_at: rows[0].sent_at, updated_at: rows[0].updated_at } : null;
+        } catch (e) { $('ann-msg').textContent = 'Run supabase/inbox.sql first (' + e.message + ').'; ann = null; }
+        $('ann-text').value = ann ? ann.text : '';
+        $('ann-meta').textContent = ann ? ('Email of ' + (ann.sent_at ? fmtDate(ann.sent_at.slice(0, 10), { weekday: undefined }) : '—') + ' · last edited ' + new Date(ann.updated_at).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) : 'Nothing in the database yet';
+        $('ann-load-json').hidden = !!ann;
+        renderAnnFiles();
+      }
+      $('ann-load-json').addEventListener('click', async () => {
+        try {
+          const j = await (await fetch('announcements.json?v=' + Date.now(), { cache: 'no-store' })).json();
+          ann = { id: null, text: j.text || '', images: (j.images || []).map(x => typeof x === 'string' ? { path: x, name: x.split('/').pop() } : x), files: j.files || [], sent_at: j.sent_at, subject: j.subject };
+          $('ann-text').value = ann.text; renderAnnFiles(); $('ann-msg').textContent = 'Loaded from the site — press Save to keep it.';
+        } catch (e) { $('ann-msg').textContent = 'Could not load announcements.json: ' + e.message; }
+      });
+      $('ann-save').addEventListener('click', async () => {
+        const text = $('ann-text').value;
+        try {
+          if (ann && ann.id) {
+            await rpc('admin_update_announcements', { p_pass: pass, p_id: ann.id, p_text: text, p_images: ann.images, p_files: ann.files, p_by: null });
+          } else {
+            await rpc('admin_publish_announcements', { p_pass: pass, p_text: text, p_images: ann ? ann.images : [], p_files: ann ? ann.files : [], p_subject: ann && ann.subject || 'Weekly Announcements', p_sent_at: ann && ann.sent_at || new Date().toISOString(), p_message_id: null, p_source: 'leaders' });
+          }
+          $('ann-msg').textContent = 'Saved — live on the home page now.'; await loadAnnouncements(); $('ann-msg').textContent = 'Saved — live on the home page now.';
+        } catch (e) { $('ann-msg').textContent = 'Not saved: ' + e.message; }
+      });
+      const wardBadgeIds = ['posts-badge', 'signup-pending-badge', 'missionary-email-badge', 'service-badge'];
+      function setWardUpdateBadge(id, count) {
+        const badge = $(id);
+        badge.textContent = String(count);
+        badge.hidden = !count;
+        const total = wardBadgeIds.reduce((sum, key) => sum + Number($(key).textContent), 0);
+        $('ward-updates-badge').textContent = String(total);
+        $('ward-updates-badge').hidden = !total;
+      }
+      const wardBadgeRequests = {};
+      async function refreshWardBadge(id, rpcName) {
+        if (!pass || $('app').hidden || document.hidden) return;
+        const request = wardBadgeRequests[id] = (wardBadgeRequests[id] || 0) + 1;
+        try {
+          const count = await rpc(rpcName, { p_pass: pass });
+          if (request === wardBadgeRequests[id]) setWardUpdateBadge(id, Number(count) || 0);
+        } catch (e) { /* Keep the previous count until the next successful refresh. */ }
+      }
+      function refreshMissionaryEmailBadge() {
+        return refreshWardBadge('missionary-email-badge', 'admin_missionary_weekly_email_count');
+      }
+      function refreshSignupPendingBadge() {
+        return refreshWardBadge('signup-pending-badge', 'admin_ward_signup_pending_count');
+      }
+      function refreshAnnouncementsPendingBadge() {
+        return refreshWardBadge('posts-badge', 'admin_posts_pending_count');
+      }
+      function refreshWardUpdateBadges() {
+        refreshMissionaryEmailBadge();
+        refreshSignupPendingBadge();
+        refreshAnnouncementsPendingBadge();
+        if (pass && !$('app').hidden && !document.hidden) NPServiceAdmin.refreshBadge();
+      }
+      document.addEventListener('visibilitychange', refreshWardUpdateBadges);
+      setInterval(refreshWardUpdateBadges, 60000);
+      const wardUpdateButtons = [...document.querySelectorAll('[data-ward-update]')];
+      const missionarySection = $('missionary-section');
+      missionarySection.addEventListener('change', () => loadWardExtras(missionarySection.value));
+      function openWardUpdate(button) {
+        const kind = button.dataset.wardUpdate;
+        const showAnnouncements = kind === 'announcements';
+        const nested = ['meals', 'declarations', 'program'];
+        for (const key of nested) $('pane-' + key).hidden = kind !== key;
+        for (const b of wardUpdateButtons) b.classList.toggle('on', b === button);
+        $('missionary-admin-section').hidden = kind !== 'missionary';
+        for (const b of wardUpdateButtons) b.setAttribute('aria-pressed', String(b === button));
+        $('ward-announcements-admin').hidden = !showAnnouncements;
+        $('ward-extras-admin').hidden = kind !== 'signup' && kind !== 'missionary';
+        $('ward-service-admin').hidden = kind !== 'service';
+        if (nested.includes(kind)) return;
+        if (kind === 'service') { NPServiceAdmin.open(); return; }
+        if (showAnnouncements) { loadPosts(); loadAnnouncements(); }
+        else {
+          if (kind === 'missionary') refreshMissionaryEmailBadge();
+          if (kind === 'signup') refreshSignupPendingBadge();
+          loadWardExtras(kind === 'missionary' ? missionarySection.value : kind);
+        }
+      }
+      for (const b of wardUpdateButtons) b.addEventListener('click', () => openWardUpdate(b));
+      document.querySelector('.tab[data-pane=announcements]').addEventListener('click', () =>
+        openWardUpdate(wardUpdateButtons.find(b => b.getAttribute('aria-pressed') === 'true')));
+
+      // ---- posts: the review queue + add / edit (posts.js, supabase/posts.sql) ----
+      let posts = [], postForm = null;
+      const whenShort = iso => new Date(iso).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      async function loadPosts() {
+        const box = $('post-queue');
+        try { posts = await rpc('admin_posts', { p_pass: pass }); }
+        catch (e) { box.innerHTML = ''; box.appendChild(el('p', { class: 'notice' }, /admin_posts/.test(e.message) ? 'Run supabase/posts.sql in Supabase to turn on posts.' : 'Could not load posts: ' + e.message)); return; }
+        renderPosts();
+      }
+      function renderPosts() {
+        const box = $('post-queue'); box.innerHTML = '';
+        const today = NPPosts.todayIso();
+        const pending = posts.filter(p => p.status === 'pending');
+        const stillRepeating = p => p.repeat && (!p.repeat_until || p.repeat_until >= today);
+        const live = posts.filter(p => p.status === 'approved' && (!p.event_date || p.event_date >= today || stillRepeating(p)));
+        // an event leaves the home page the day after it happens; here it lingers two weeks, then goes
+        const cutoff = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
+        const past = posts.filter(p => p.status === 'approved' && p.event_date && !stillRepeating(p) && (p.repeat ? p.repeat_until : p.event_date) < today && (p.repeat ? p.repeat_until : p.event_date) >= cutoff);
+        const rejected = posts.filter(p => p.status === 'rejected');
+        refreshAnnouncementsPendingBadge();
+        const section = (title, list, cls, empty) => {
+          box.appendChild(el('h3', { class: 'post-queue-title' }, [title, el('span', { class: 'pill ' + (cls || 'off') }, String(list.length))]));
+          if (!list.length) { box.appendChild(el('p', { class: 'muted' }, empty)); return; }
+          box.appendChild(el('div', { class: 'post-review' }, list.map(postCard)));
+        };
+        section('Waiting for approval', pending, 'wait', 'Nothing waiting.');
+        section('On the home page', live, 'ok', 'Nothing live — add a post or approve one.');
+        if (past.length) section('Past events', past, 'off', '');
+        if (rejected.length) section('Not approved', rejected, 'off', '');
+      }
+      function postCard(p) {
+        const who = p.source === 'public' ? 'Sent in by ' + (p.submitted_name || 'someone') + (p.submitted_contact ? ' · ' + p.submitted_contact : '') : 'Posted by leaders';
+        const meta = who + ' · ' + whenShort(p.created_at) + (p.reviewed_at && p.status !== 'pending' ? ' · ' + p.status + ' ' + whenShort(p.reviewed_at) : '') + (p.reminded_at ? ' · texted ' + whenShort(p.reminded_at) : '');
+        const b = (label, cls, fn) => el('button', { class: 'chip ' + (cls || ''), type: 'button', onclick: fn }, label);
+        const actions = [
+          p.status !== 'approved' ? b(p.status === 'pending' ? 'Approve' : 'Publish', 'ok', () => setPostStatus(p, 'approved')) : null,
+          p.status === 'approved' && C.sheetsRefreshUrl ? b('Text a reminder', 'remind-btn', e => openReminder(p, e.currentTarget.closest('.post'))) : null,
+          b('Edit', '', () => openPostEditor(p)),
+          p.status === 'approved' ? b('Take down', '', () => setPostStatus(p, 'rejected')) : null,
+          p.status === 'pending' ? b('Reject', 'danger', () => setPostStatus(p, 'rejected')) : null,
+          p.status !== 'pending' ? b('Delete', 'danger', () => deletePost(p)) : null,
+        ];
+        const c = NPPosts.card(p, { footer: el('div', {}, [el('div', { class: 'post-meta' }, meta), p.repeat && p.status !== 'rejected' ? skipRow(p) : null, el('div', { class: 'post-actions' }, actions)]) });
+        c.classList.add(p.status);
+        return c;
+      }
+      // Upcoming dates of a repeating post, each a toggle: tap to cancel that one date (it shows as
+      // cancelled on the site and in the email, and drops out of subscribed calendars), tap again to restore.
+      function skipRow(p) {
+        const occ = NPPosts.occurrences(p, 4);
+        if (!occ.length) return el('p', { class: 'muted small' }, 'No dates left in this series.');
+        return el('div', { class: 'post-skips' }, [el('span', { class: 'muted small' }, 'Upcoming — tap a date to cancel it:'), ...occ.map(o => {
+          const dp = NPPosts.dateParts(o.date);
+          return el('button', { class: 'chip' + (o.cancelled ? ' skipped' : ''), type: 'button', title: o.cancelled ? 'Cancelled — tap to put it back' : 'Cancel this one date', onclick: async e => {
+            e.currentTarget.disabled = true;
+            try { p.skip_dates = await rpc('admin_post_skip', { p_pass: pass, p_id: p.id, p_date: o.date, p_skip: !o.cancelled }) || []; toast(o.cancelled ? dp.mon + ' ' + dp.d + ' is back on' : dp.mon + ' ' + dp.d + ' cancelled'); renderPosts(); if (p.status === 'approved') pingCalendar(); }
+            catch (err) { e.currentTarget.disabled = false; toast('Failed: ' + (/admin_post_skip/.test(err.message) ? 'run supabase/repeat.sql first' : err.message), 4000); }
+          } }, (o.cancelled ? '✕ ' : '') + dp.dow.slice(0, 3) + ' ' + dp.mon + ' ' + dp.d);
+        })]);
+      }
+      async function setPostStatus(p, status) {
+        try { await rpc('admin_post_status', { p_pass: pass, p_id: p.id, p_status: status, p_by: null }); toast(status === 'approved' ? '“' + p.title + '” is on the home page' : status === 'rejected' ? '“' + p.title + '” taken down' : 'Updated'); await loadPosts(); if (p.event_date) pingCalendar(); }
+        catch (e) { toast('Failed: ' + e.message, 4000); }
+      }
+      async function deletePost(p) {
+        if (!confirm('Delete “' + p.title + '” for good?')) return;
+        try { await rpc('admin_post_delete', { p_pass: pass, p_id: p.id }); toast('Deleted'); await loadPosts(); if (p.event_date && p.status === 'approved') pingCalendar(); } catch (e) { toast('Failed: ' + e.message, 4000); }
+      }
+      function openPostEditor(p) {
+        const box = $('post-editor'); box.innerHTML = ''; box.hidden = false;
+        postForm = NPPosts.form(p || {}, { submitLabel: p ? 'Save' : 'Publish' });
+        const msg = el('span', { class: 'muted' });
+        const save = el('button', { class: 'btn small', type: 'button', onclick: async () => {
+          const bad = postForm.validate(); if (bad) { msg.textContent = bad; return; }
+          save.disabled = true; msg.textContent = 'Saving…';
+          let v = postForm.values();
+          try {
+            v = await postForm.finalize();
+            // the repeat fields only go along when used (or being cleared), so plain posts still save before supabase/repeat.sql is run
+            const withRepeat = v.repeat || (p && p.repeat);
+            const id = await rpc('admin_post_save', Object.assign({ p_pass: pass, p_id: p ? p.id : null, p_title: v.title, p_details: v.details, p_event_date: v.event_date, p_start_time: v.start_time, p_end_time: v.end_time, p_location: v.location, p_link: v.link, p_flyer_url: v.flyer_url, p_by: null },
+              withRepeat ? { p_repeat: v.repeat, p_repeat_until: v.repeat_until, p_repeat_show: v.repeat_show } : {}));
+            toast(p ? 'Saved' : '“' + v.title + '” is on the home page'); box.hidden = true; box.innerHTML = ''; await loadPosts();
+            if (v.event_date || (p && p.event_date)) pingCalendar();
+          } catch (e) { msg.textContent = 'Not saved: ' + (/admin_post_save/.test(e.message) ? (v.repeat ? 'run supabase/repeat.sql first (repeating posts)' : 'run supabase/posts.sql first') : e.message); save.disabled = false; }
+        } }, p ? 'Save changes' : 'Publish now');
+        box.appendChild(el('h3', { style: 'margin:0 0 10px' }, p ? 'Edit post' : 'New post'));
+        box.appendChild(postForm.el);
+        box.appendChild(el('div', { class: 'inline' }, [save, el('button', { class: 'btn small secondary', type: 'button', onclick: () => { box.hidden = true; box.innerHTML = ''; } }, 'Cancel'), msg]));
+        box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        postForm.focus();
+      }
+      $('post-new').addEventListener('click', () => openPostEditor(null));
+
+      // ---- "Text a reminder": one SimpleTexting campaign to the whole ward list, via the Google script ----
+      // The wording is shown first (editable), with how many people are on the list; nothing goes
+      // out until "Send to N people" is tapped. The script stamps the post (reminded_at) afterwards.
+      const gsm = t => t.replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, '\'').replace(/[\u201c\u201d]/g, '"').replace(/\u00b7/g, '-').replace(/\u2026/g, '...');
+      function reminderText(p, shortLink) {
+        const site = (typeof location !== 'undefined' && location.origin) || '';
+        const occ = p.event_date ? NPPosts.occurrences(p, 1).find(o => !o.cancelled) : null;
+        const dp = occ ? NPPosts.dateParts(occ.date) : null;
+        const t = NPPosts.todayIso(), [y, m, d] = t.split('-').map(Number), tm = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+        const day = occ ? (occ.date === t ? 'Today' : occ.date === tm ? 'Tomorrow' : dp.dow) : '';
+        const when = dp ? day + ' ' + dp.mon + ' ' + dp.d + (p.start_time ? ' at ' + NPPosts.fmtTime(p.start_time) : '') : '';
+        // e/<id> is the page the Google script publishes with the post's preview tags (flyer, title, date
+        // show under the link in Messages / WhatsApp); e.html?id= always works but previews plain
+        return gsm((C.wardName || 'Ward') + ': ' + p.title + (when ? ' - ' + when : '') + (p.location ? ', ' + p.location : '') + '. Details' + (p.flyer_url ? ' + flyer' : '') + ': ' + site + (shortLink ? '/e/' + p.id : '/e.html?id=' + p.id));
+      }
+      const previewPageExists = id => fetch('e/' + id + '.html', { method: 'HEAD', cache: 'no-store' }).then(r => r.ok).catch(() => false);
+      const smsSegments = t => { const n = [...t].length; return /[^\x00-\x7f]/.test(t) ? (n <= 70 ? 1 : Math.ceil(n / 67)) : (n <= 160 ? 1 : Math.ceil(n / 153)); };
+      async function openReminder(p, cardEl) {
+        cardEl.querySelectorAll('.remind-box').forEach(x => x.remove());
+        const hasPage = await previewPageExists(p.id);
+        const ta = el('textarea', { rows: 4, maxlength: 900, style: 'width:100%' });
+        ta.value = reminderText(p, hasPage);
+        const mms = el('input', { type: 'checkbox' });
+        const media = () => p.flyer_url && mms.checked ? p.flyer_url : '';
+        const count = el('span', { class: 'muted small' }), listMsg = el('p', { class: 'muted small', style: 'margin:0' }, 'Checking the list…'), msg = el('span', { class: 'muted small' });
+        const send = el('button', { class: 'btn small', type: 'button', disabled: '' }, 'Send');
+        const paintCount = () => { const n = [...ta.value].length, seg = smsSegments(ta.value); count.textContent = n + ' characters · ' + seg + ' text' + (seg === 1 ? '' : 's') + (/[^\x00-\x7f]/.test(ta.value) ? ' (special characters shorten texts — plain quotes and dashes fit more)' : ''); };
+        ta.addEventListener('input', paintCount); paintCount();
+        // a test to one phone first (the single-number path the SimpleTexting test-text check uses), remembered per device
+        const testPhone = el('input', { type: 'tel', placeholder: 'your mobile', inputmode: 'tel', style: 'width:150px', value: (() => { try { return localStorage.getItem('np_test_phone') || ''; } catch (e) { return ''; } })() });
+        const testBtn = el('button', { class: 'chip', type: 'button', onclick: async () => {
+          const digits = testPhone.value.replace(/\D/g, ''); if (digits.length < 10) { msg.textContent = 'Enter a 10-digit mobile number for the test.'; return; }
+          testBtn.disabled = true; msg.textContent = 'Sending the test…';
+          try {
+            const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'notify', pass, name: 'Test', phone: digits, email: '', flag: 'test', sms: '[TEST] ' + ta.value.trim(), media: media() }) }).then(x => x.json());
+            if (!r.ok || r.sms !== 'sent') throw new Error(r.error || ('text ' + r.sms));
+            try { localStorage.setItem('np_test_phone', digits); } catch (e) {}
+            msg.textContent = 'Test sent to ' + digits.replace(/(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3') + ' — nothing went to the list.';
+          } catch (e) { msg.textContent = 'Test not sent: ' + e.message; }
+          testBtn.disabled = false;
+        } }, 'Text a test to');
+        const box = el('div', { class: 'remind-box' }, [
+          el('b', {}, 'Text a reminder'),
+          listMsg,
+          p.reminded_at ? el('p', { class: 'muted small', style: 'margin:0' }, 'A reminder for this already went out ' + whenShort(p.reminded_at) + '.') : null,
+          !hasPage ? el('p', { class: 'muted small', style: 'margin:0' }, 'This post’s preview page isn’t published yet, so the link won’t show the flyer under the text — Rebuild calendar files (Email version) and wait a minute, then reopen this.') : null,
+          ta, count,
+          p.flyer_url ? el('label', { class: 'inline muted small', style: 'gap:6px' }, [mms, 'Attach the flyer as a picture (MMS — uses more credits per text than a link)']) : null,
+          el('div', { class: 'inline' }, [testBtn, testPhone, el('span', { class: 'muted small' }, 'first, if you like')]),
+          el('div', { class: 'inline' }, [send, el('button', { class: 'chip', type: 'button', onclick: () => box.remove() }, 'Cancel'), msg]),
+        ]);
+        cardEl.querySelector('.post-actions').before(box);
+        let contacts = null, list = '';
+        try {
+          const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'remind', pass, preview: true }) }).then(x => x.json());
+          if (!r.ok) throw new Error(r.error || 'unknown error');
+          contacts = r.contacts; list = r.list;
+          listMsg.textContent = 'Goes to the SimpleTexting list “' + list + '” — ' + contacts + ' people. Everyone on it gets this, so read it once more.';
+          send.textContent = (p.reminded_at ? 'Send again to ' : 'Send to ') + contacts + ' people'; send.disabled = false;
+        } catch (e) { listMsg.textContent = 'Could not reach the list: ' + (/unknown action/.test(e.message) ? 'the Google script needs the newest announcements.gs deployed' : e.message); }
+        send.addEventListener('click', async () => {
+          const text = ta.value.trim(); if (!text) { msg.textContent = 'Nothing to send.'; return; }
+          if (!confirm('Send this text to ' + contacts + ' people on “' + list + '”?\n\n' + text)) return;
+          send.disabled = true; msg.textContent = 'Sending…';
+          try {
+            const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'remind', pass, postId: p.id, title: p.title, text, media: media() }) }).then(x => x.json());
+            if (!r.ok) throw new Error(r.error || 'unknown error');
+            toast('Sent to ' + r.contacts + ' people' + (r.note ? ' — ' + r.note : ''), 5000); box.remove(); await loadPosts();
+          } catch (e) { msg.textContent = 'Not sent: ' + e.message; send.disabled = false; }
+        });
+        ta.focus();
+      }
+
+      // The Google script publishes calendar.ics + cal/<id>.ics from the approved posts (the "Add to
+      // calendar" links and the subscribable ward calendar). Ask it to rebuild right after a change;
+      // it also runs with every 6-hour sheet sync, so a miss here just means a short delay.
+      let calendarBusy = false;
+      async function pingCalendar(btn) {
+        if (!C.sheetsRefreshUrl || calendarBusy) return;
+        calendarBusy = true; const msg = $('pe-cal-msg'); if (btn) { btn.disabled = true; msg.textContent = 'Rebuilding…'; }
+        try {
+          const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'calendar', pass }) }).then(x => x.json());
+          if (!r.ok) throw new Error(r.error || 'unknown error');
+          const n = (r.written || []).length + (r.deleted || []).length;
+          msg.textContent = (n ? n + ' file' + (n === 1 ? '' : 's') + ' updated — live on the site in about a minute.' : 'Already up to date.') + ' ' + r.events + ' event' + (r.events === 1 ? '' : 's') + ' in the ward calendar.';
+        } catch (e) {
+          const t = /unknown action/.test(e.message) ? 'the Google script needs the newest announcements.gs deployed' : e.message;
+          msg.textContent = 'Calendar files not updated: ' + t; if (!btn) toast('Calendar files not updated — ' + t, 5000);
+        } finally { calendarBusy = false; if (btn) btn.disabled = false; }
+      }
+      $('pe-cal-rebuild').addEventListener('click', e => pingCalendar(e.currentTarget));
+
+      // ---- the weekly email built from the live posts ----
+      let emailSettings = null;
+      async function openEmailPanel() {
+        const panel = $('post-email-panel'); panel.hidden = false; $('pe-msg').textContent = 'Building…';
+        try {
+          if (!emailSettings) {
+            const rows = await rpc('admin_get_settings', { p_pass: pass }); const st = Object.fromEntries(rows.map(r => [r.key, r.value]));
+            emailSettings = { header: st.posts_email_header || NPPosts.EMAIL_DEFAULTS.header, footer: st.posts_email_footer || NPPosts.EMAIL_DEFAULTS.footer };
+            $('pe-header').value = emailSettings.header; $('pe-footer').value = emailSettings.footer;
+          }
+          if (!$('pe-title').value) $('pe-title').value = (C.wardName || 'Ward') + ' — Weekly Announcements · ' + new Date().toLocaleDateString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric' });
+          await paintEmail(); $('pe-msg').textContent = '';
+          panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (e) { $('pe-msg').textContent = /posts_public/.test(e.message) ? 'Run supabase/posts.sql first.' : 'Could not build it: ' + e.message; }
+      }
+      let livePosts = [];
+      async function paintEmail() {
+        livePosts = await rpc('posts_public') || [];
+        const o = { title: $('pe-title').value.trim(), header: $('pe-header').value, footer: $('pe-footer').value };
+        $('pe-preview').innerHTML = NPPosts.emailHtml(livePosts, o);
+        $('pe-plain').value = NPPosts.emailPlain(livePosts, o);
+        paintFlyerPicker();
+        if (!livePosts.length) $('pe-msg').textContent = 'No live posts yet — approve or add some first.';
+      }
+      ['pe-title', 'pe-header', 'pe-footer'].forEach(id => $(id).addEventListener('input', () => { const o = { title: $('pe-title').value.trim(), header: $('pe-header').value, footer: $('pe-footer').value }; $('pe-preview').innerHTML = NPPosts.emailHtml(livePosts, o); $('pe-plain').value = NPPosts.emailPlain(livePosts, o); }));
+      $('post-email').addEventListener('click', openEmailPanel);
+      $('pe-close').addEventListener('click', () => { $('post-email-panel').hidden = true; });
+      $('pe-save').addEventListener('click', async () => {
+        try {
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'posts_email_header', p_value: $('pe-header').value });
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'posts_email_footer', p_value: $('pe-footer').value });
+          emailSettings = { header: $('pe-header').value, footer: $('pe-footer').value }; $('pe-msg').textContent = 'Wording saved.';
+        } catch (e) { $('pe-msg').textContent = 'Not saved: ' + e.message; }
+      });
+      async function copyEmail(rich) {
+        const html = $('pe-preview').innerHTML, text = $('pe-plain').value;
+        try {
+          if (rich && navigator.clipboard && window.ClipboardItem) {
+            await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+          } else if (rich) {
+            const r = document.createRange(); r.selectNodeContents($('pe-preview')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); document.execCommand('copy'); sel.removeAllRanges();
+          } else { await navigator.clipboard.writeText(text); }
+          $('pe-msg').textContent = rich ? 'Copied with formatting — paste into the email body.' : 'Plain text copied.';
+        } catch (e) { $('pe-msg').textContent = 'Copy failed (' + e.message + ') — select the text below and copy it by hand.'; }
+      }
+      $('pe-copy-html').addEventListener('click', () => copyEmail(true));
+      function paintFlyerPicker() {
+        const box = $('pe-flyer-list'); box.innerHTML = '';
+        // one entry per flyer: two posts can share an image (the FHE calendar), and it only needs attaching once
+        const byUrl = new Map();
+        livePosts.filter(p => p.flyer_url).forEach(p => { const g = byUrl.get(p.flyer_url); if (g) g.also.push(p.title); else byUrl.set(p.flyer_url, { post: p, also: [] }); });
+        if (!byUrl.size) { box.appendChild(el('p', { class: 'muted' }, 'No flyers on the live posts.')); return; }
+        [...byUrl.values()].forEach(({ post: p, also }) => box.appendChild(el('label', { class: 'flyer-opt' }, [
+          el('input', { type: 'checkbox', checked: '', 'data-id': p.id }),
+          el('img', { src: p.flyer_url, alt: '' }),
+          el('span', {}, [el('b', {}, p.title), el('span', { class: 'muted small' }, (p.event_date ? ' · ' + NPPosts.dateParts(p.event_date).long : '') + (also.length ? ' · also used by ' + also.join(', ') : ''))]),
+        ])));
+      }
+      const pickedFlyers = () => { const ids = new Set([...document.querySelectorAll('#pe-flyer-list input:checked')].map(i => +i.dataset.id)); return livePosts.filter(p => ids.has(p.id)); };
+      async function downloadPicked(zip) {
+        const picked = pickedFlyers(); if (!picked.length) { $('pe-msg').textContent = 'Nothing ticked.'; return; }
+        $('pe-msg').textContent = 'Fetching ' + picked.length + ' flyer' + (picked.length === 1 ? '' : 's') + '…';
+        const r = await NPPosts.downloadFlyers(picked, { zip, name: 'flyers-' + NPPosts.todayIso() });
+        $('pe-msg').textContent = (r.count ? r.count + ' flyer' + (r.count === 1 ? '' : 's') + (zip ? ' in one .zip — unzip, select all, drag onto LCR’s Attachments box.' : ' downloaded.') : 'Nothing downloaded.') + (r.failed.length ? ' Could not fetch: ' + r.failed.join(', ') : '');
+      }
+      $('pe-flyers-zip').addEventListener('click', () => downloadPicked(true));
+      $('pe-flyers-each').addEventListener('click', () => downloadPicked(false));
+      $('pe-flyers-all').addEventListener('click', () => document.querySelectorAll('#pe-flyer-list input').forEach(i => { i.checked = true; }));
+      $('pe-flyers-none').addEventListener('click', () => document.querySelectorAll('#pe-flyer-list input').forEach(i => { i.checked = false; }));
+      $('pe-copy-text').addEventListener('click', () => copyEmail(false));
+
+      // ---- settings: the two attendance rolls ----
+      const rollSlots = [
+        { key: 'sunday_school', id: 'school', label: 'Sunday School', hint: 'First class of second hour' },
+        { key: 'priesthood___relief_society', id: 'org', label: 'Organization Classes', hint: 'Second class of second hour' },
+      ];
+      function renderRollClasses(get) {
+        $('rc-list').replaceChildren(...rollSlots.map(c => {
+          const [start = '', end = ''] = (get('window_' + c.key) || '-').split('-');
+          return el('fieldset', { class: 'roll-slot-settings' }, [
+            el('legend', {}, c.label),
+            el('p', { class: 'muted small' }, c.hint),
+            el('label', { class: 'check' }, [
+              el('input', { type: 'checkbox', id: 'rc-' + c.id + '-enabled', checked: get('roll_enabled_' + c.key) !== 'false' ? '' : null }),
+              el('span', {}, 'Enable check-in'),
+            ]),
+            el('div', { class: 'inline' }, [
+              el('div', { class: 'field' }, [el('label', { for: 'rc-' + c.id + '-start' }, 'Opens'), el('input', { type: 'time', id: 'rc-' + c.id + '-start', value: start })]),
+              el('div', { class: 'field' }, [el('label', { for: 'rc-' + c.id + '-end' }, 'Closes'), el('input', { type: 'time', id: 'rc-' + c.id + '-end', value: end })]),
+            ]),
+          ]);
+        }));
+      }
+      let bishopWorkerConfigured = false;
+      async function loadSettings() {
+        try {
+          const rows = await rpc('admin_get_settings', { p_pass: pass });
+          const get = k => (rows.find(r => r.key === k) || {}).value;
+          $('wn-name').value = get('ward_name') || '';
+          $('ward-email').value = get('ward_email') || '';
+          $('ward-email-save').disabled = false;
+          renderRollClasses(get);
+          $('w-save').disabled = false;
+          $('w-day').value = get('window_day') || '0';
+          $('rc-home-visible').checked = get('roll_home_visible') !== 'false';
+          $('rc-home-visible').disabled = false;
+          $('w-enforce').checked = get('roll_enforce_window') !== 'false';
+          $('b-email').value = get('bishop_notify_email') || '';
+          $('b-save').disabled = false;
+          bishopWorkerConfigured = !!get('bishop_email_worker_hash');
+          $('b-setup-msg').textContent = bishopWorkerConfigured ? 'A script key has been generated. Install the trigger in Google Apps Script to start sending alerts.' : 'Email alerts require a one-time script setup.';
+        } catch (e) { $('w-msg').textContent = 'Could not load settings: ' + e.message; }
+      }
+      $('rc-home-visible').addEventListener('change', async () => {
+        const toggle = $('rc-home-visible'), msg = $('rc-visibility-msg'), visible = toggle.checked;
+        toggle.disabled = true;
+        msg.textContent = 'Saving…';
+        try {
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'roll_home_visible', p_value: String(visible) });
+          msg.textContent = visible ? 'Class check-in is visible on the homepage.' : 'Class check-in is hidden on the homepage.';
+        } catch (e) { toggle.checked = !visible; msg.textContent = 'Not saved: ' + e.message; }
+        finally { toggle.disabled = false; }
+      });
+      $('ward-email-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const email = $('ward-email').value.trim();
+        const button = $('ward-email-save');
+        const status = $('ward-email-status');
+        button.disabled = true;
+        try {
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'ward_email', p_value: email });
+          C.wardEmail = email;
+          status.textContent = email ? 'Saved. The contact page will show this address.' : 'Saved. The contact page will hide the email address.';
+        } catch (error) { status.textContent = 'Could not save: ' + error.message; }
+        finally { button.disabled = false; }
+      });
+
+      $('wn-save').addEventListener('click', async () => {
+        const name = $('wn-name').value.trim();
+        if (name.length < 2 || name.length > 120) { $('wn-msg').textContent = 'Enter a ward name (2–120 characters).'; return; }
+        try { await rpc('admin_set_setting', { p_pass: pass, p_key: 'ward_name', p_value: name }); C.wardName = name; $('wn-msg').textContent = 'Saved.'; }
+        catch (e) { $('wn-msg').textContent = 'Not saved: ' + e.message; }
+      });
+      $('b-email-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        const email = $('b-email').value.trim(), button = $('b-save');
+        button.disabled = true;
+        try {
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'bishop_notify_email', p_value: email });
+          $('b-msg').textContent = email ? 'Recipient saved. The Google Apps Script trigger sends the alerts.' : 'Saved — email alerts are off.';
+        } catch (e) { $('b-msg').textContent = 'Not saved: ' + e.message; }
+        finally { button.disabled = false; }
+      });
+      $('b-generate-key').addEventListener('click', async e => {
+        if (bishopWorkerConfigured && !confirm('Replace the existing key? Update Script Properties in Google Apps Script afterward to resume alerts.')) return;
+        const button = e.currentTarget; button.disabled = true;
+        try {
+          $('b-worker-key').value = await rpc('admin_bishop_email_worker_key', { p_pass: pass });
+          $('b-key-box').hidden = false;
+          $('b-worker-key').select();
+          bishopWorkerConfigured = true;
+          $('b-setup-msg').textContent = 'Copy this key now. It is shown only here and cannot be recovered after you leave the page.';
+        } catch (e) { $('b-setup-msg').textContent = 'Could not generate a key: ' + e.message; }
+        finally { button.disabled = false; }
+      });
+      $('w-save').addEventListener('click', async e => {
+        const values = { p_pass: pass, p_day: Number($('w-day').value), p_enforce: $('w-enforce').checked };
+        for (const c of rollSlots) {
+          const start = $('rc-' + c.id + '-start').value, end = $('rc-' + c.id + '-end').value;
+          if (!!start !== !!end || start && start >= end) {
+            $('w-msg').textContent = c.label + ': enter both times, with closing later than opening, or leave both blank.';
+            return;
+          }
+          values['p_' + c.id + '_enabled'] = $('rc-' + c.id + '-enabled').checked;
+          values['p_' + c.id + '_start'] = start || null;
+          values['p_' + c.id + '_end'] = end || null;
+        }
+        const button = e.currentTarget; button.disabled = true;
+        try {
+          await rpc('admin_save_roll_slots', values);
+          classes = await NP.loadClasses();
+          $('w-msg').textContent = 'Check-in settings saved.';
+        } catch (e) { $('w-msg').textContent = 'Not saved: ' + e.message; }
+        finally { button.disabled = false; }
+      });
+      document.querySelector('.tab[data-pane=settings]').addEventListener('click', loadSettings);
+      $('roll-classes-settings').addEventListener('toggle', () => {
+        if ($('roll-classes-settings').open) loadSettings();
+      });
+      $('import-btn').addEventListener('click', async () => {
+        let data;
+        try { data = JSON.parse($('import-json').value); if (!Array.isArray(data)) throw new Error('not an array'); } catch (e) { $('import-msg').textContent = 'Invalid JSON: ' + e.message; return; }
+        try {
+          const r = (await rpc('admin_upsert_members', { p_pass: pass, p_members: data, p_deactivate_missing: true }))[0];
+          $('import-msg').textContent = `Imported: ${r.inserted} new, ${r.updated} updated, ${r.deactivated} deactivated.`;
+          await loadMembers();
+        } catch (e) { $('import-msg').textContent = 'Import failed: ' + e.message; }
+      });
+    })();
+  </script>
+  <footer class="wrap site-legal-footer">
+    <p>This independently maintained website is not an official ward website or an official website of The Church of Jesus Christ of Latter-day Saints. It is not sponsored or endorsed by the Church.</p>
+    <nav aria-label="Website policies and contact">
+      <a href="website-terms.html">Terms of Use</a>
+      <a href="website-privacy.html">Privacy Policy</a>
+      <a href="send-a-note-74b2.html">Contact the ward</a>
+    </nav>
+  </footer>
+</body>
+</html>

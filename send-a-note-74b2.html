@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contact the ward</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="hero compact">
+    <a class="back" href="index.html">‹ Home</a>
+    <h1>Contact the ward</h1>
+  </header>
+  <main class="wrap">
+    <form class="card edit-form" id="contact-form">
+      <p>Send a message to the ward leaders.</p>
+      <p id="ward-email-line" hidden>Email the ward at <a id="ward-email-link"></a>.</p>
+      <div class="field"><label for="name">Your name</label><input id="name" name="name" autocomplete="name" required minlength="2" maxlength="80"></div>
+      <div class="field"><label for="email">Your email</label><input id="email" name="email" type="email" autocomplete="email" required maxlength="120"></div>
+      <div class="field"><label for="message">Message</label><textarea id="message" name="message" required rows="5" maxlength="1000"></textarea></div>
+      <button class="btn" type="submit">Send message</button>
+      <p id="contact-status" role="status"></p>
+    </form>
+  </main>
+  <footer class="wrap site-legal-footer">
+    <p>This independently maintained website is not an official ward website or an official website of The Church of Jesus Christ of Latter-day Saints. It is not sponsored or endorsed by the Church.</p>
+    <nav aria-label="Website policies">
+      <a href="website-terms.html">Terms of Use</a>
+      <a href="website-privacy.html">Privacy Policy</a>
+    </nav>
+  </footer>
+  <script src="config.js"></script>
+  <script src="app.js?v=ward-email"></script>
+  <script>
+    NP.loadSiteSettings().then(() => {
+      const email = NP.C.wardEmail;
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return;
+      const link = document.getElementById('ward-email-link');
+      link.href = 'mailto:' + encodeURIComponent(email).replace('%40', '@');
+      link.textContent = email;
+      document.getElementById('ward-email-line').hidden = false;
+    });
+    const form = document.getElementById('contact-form');
+    const messageStatus = document.getElementById('contact-status');
+    const submit = form.querySelector('button');
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (submit.disabled) return;
+      const data = new FormData(form);
+      submit.disabled = true;
+      messageStatus.textContent = 'Sending…';
+      try {
+        const saved = await NP.rpc('submit_ward_contact', {
+          p_name: data.get('name').trim(),
+          p_email: data.get('email').trim(),
+          p_message: data.get('message').trim()
+        });
+        if (saved !== true) throw new Error('The site did not confirm receipt.');
+        form.reset();
+        messageStatus.textContent = 'Your message was sent to the ward leaders.';
+      } catch (error) {
+        messageStatus.textContent = error.message;
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Serve & share</title><meta name="theme-color" content="#1b2a41"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet"><link rel="stylesheet" href="app.css?v=32"><link rel="stylesheet" href="service-board.css?v=2"><link rel="icon" type="image/svg+xml" href="img/ward-icon.svg?v=1">
+</head><body>
+<header class="hero compact">
+  <a class="back" href="index.html">‹ Home</a>
+  <p class="eyebrow" id="sb-ward">Your Ward</p>
+  <h1>Serve &amp; Share</h1>
+  <p class="date">Borrow an item, lend a hand, or join a service project.</p>
+</header>
+<main class="wrap sb-public">
+  <div class="sb-board-heading">
+    <div>
+      <h2 id="sb-board-title">Ward listings</h2>
+      <button id="sb-mine" class="sb-text-button" type="button" aria-pressed="false">My listings</button>
+    </div>
+    <button id="sb-new" class="btn" type="button">+ New listing</button>
+  </div>
+  <section id="sb-browse" class="sb-browse-panel" aria-label="Find listings">
+    <label class="sr-only" for="sb-search">Search listings</label>
+    <input id="sb-search" type="search" placeholder="Search items, help, or projects" maxlength="100">
+    <div id="sb-filters" class="chips sb-filter-row" role="group" aria-label="Filter by listing type"></div>
+  </section>
+  <p id="sb-message" class="muted" role="status">Loading listings…</p>
+  <div id="sb-list" class="sb-grid" aria-labelledby="sb-board-title"></div>
+  <nav id="sb-pages" class="sb-pages" aria-label="Listing pages"></nav>
+  <p class="footer"><a href="admin.html#service">Leaders</a></p>
+</main>
+<dialog id="sb-dialog" class="meal-dialog sb-public-dialog" aria-labelledby="sb-dialog-title"><div class="signup-card"><div class="sb-dialog-heading"><h2 id="sb-dialog-title">Listing</h2><button id="sb-close" type="button" class="chip" aria-label="Close popup">Close</button></div><p id="sb-dialog-error" class="notice error" role="alert" hidden></p><div id="sb-dialog-body"></div></div></dialog>
+<script src="config.js"></script><script src="app.js?v=5"></script><script src="service-shared.js?v=2"></script><script src="service.js?v=2"></script>  <footer class="wrap site-legal-footer">
+    <p>This independently maintained website is not an official ward website or an official website of The Church of Jesus Christ of Latter-day Saints. It is not sponsored or endorsed by the Church.</p>
+    <nav aria-label="Website policies and contact">
+      <a href="website-terms.html">Terms of Use</a>
+      <a href="website-privacy.html">Privacy Policy</a>
+      <a href="send-a-note-74b2.html">Contact the ward</a>
+    </nav>
+  </footer>
+</body></html>

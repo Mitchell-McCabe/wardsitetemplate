@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Roll</title>
+  <meta name="theme-color" content="#1b2a41">
+  <link rel="icon" type="image/svg+xml" href="img/ward-icon.svg?v=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css?v=18">
+</head>
+<body>
+  <header class="hero compact">
+    <a class="back" href="index.html">‹ Home</a>
+    <p class="eyebrow">Roll</p>
+    <h1 id="title">…</h1>
+    <p class="date" id="date"></p>
+  </header>
+
+  <main class="wrap" id="main">
+    <div class="notice" id="closed" hidden></div>
+    <form class="card" id="check-in-form" hidden>
+      <div class="field">
+        <label for="name">Full name</label>
+        <input id="name" name="attendance-name" type="text" maxlength="60" autocomplete="off" autocapitalize="words" required>
+      </div>
+      <div class="field" id="saved-section" hidden>
+        <label for="saved">Names saved on this device</label>
+        <select id="saved"><option value="">Choose a saved name</option></select>
+        <button class="chip" id="forget" type="button">Forget saved names</button>
+      </div>
+      <p><label><input id="remember" type="checkbox"> Remember this name on this device</label></p>
+      <button class="btn" id="submit" type="submit">Check in</button>
+    </form>
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script>
+    (async function () {
+      const { C, rpc, fmtDate, store } = NP;
+      const $ = id => document.getElementById(id);
+      const form = $('check-in-form');
+      const field = $('name');
+      const saved = $('saved');
+      const submit = $('submit');
+      const status = $('status');
+      const savedKey = 'np_check_in_names';
+      store.del('np_me');
+      const stored = store.get(savedKey, []);
+      let names = Array.isArray(stored) ? stored.filter(n => typeof n === 'string' && n.length > 0 && n.length <= 60) : [];
+      let busy = false;
+
+      function renderSaved() {
+        saved.replaceChildren(new Option('Choose a saved name', ''), ...names.map(name => new Option(name, name)));
+        $('saved-section').hidden = names.length === 0;
+      }
+      renderSaved();
+      saved.addEventListener('change', () => {
+        if (saved.value) field.value = saved.value;
+        field.focus();
+      });
+      $('forget').addEventListener('click', () => {
+        const wasSelected = saved.value && field.value === saved.value;
+        names = [];
+        store.del(savedKey);
+        if (wasSelected) field.value = '';
+        renderSaved();
+        status.textContent = 'Saved names removed from this device.';
+      });
+
+      try {
+        await NP.loadSiteSettings();
+        const cls = new URLSearchParams(location.search).get('class');
+        const info = (await NP.loadClasses()).find(c => c.key === cls);
+        if (!info) { location.replace('index.html'); return; }
+        const meetingDate = NP.currentMeetingDate();
+        $('title').textContent = info.label;
+        $('date').textContent = fmtDate(meetingDate);
+        document.title = info.short + ' · ' + (C.wardName || 'Ward');
+        function paintWindow() {
+          const state = NP.windowState(cls);
+          form.hidden = !state.open;
+          submit.disabled = busy || !state.open;
+          $('closed').hidden = state.open;
+          $('closed').textContent = state.open ? '' : `Check-in for ${info.short} is closed. ${state.label}.`;
+        }
+        await NP.loadWindows();
+        NP.everyTick(paintWindow);
+        form.addEventListener('submit', async event => {
+          event.preventDefault();
+          if (busy || !NP.windowState(cls).open) return;
+          const name = field.value.trim().replace(/\s+/g, ' ');
+          if (name.split(' ').length < 2) { status.textContent = 'Enter your first and last name.'; field.focus(); return; }
+          const remember = $('remember').checked;
+          busy = true;
+          paintWindow();
+          status.textContent = 'Checking in…';
+          try {
+            if (await rpc('check_in_by_name', { p_date: meetingDate, p_class: cls, p_name: name }) !== true)
+              throw Error('The site did not confirm your check-in. Try again.');
+            if (remember) {
+              names = [name, ...names.filter(savedName => savedName.toLowerCase() !== name.toLowerCase())].slice(0, 20);
+              store.set(savedKey, names);
+            }
+            form.reset();
+            renderSaved();
+            status.textContent = `Check-in recorded for ${name}.`;
+          } catch (error) {
+            status.textContent = error.message;
+          } finally {
+            busy = false;
+            paintWindow();
+          }
+        });
+      } catch (error) {
+        status.textContent = 'Could not load check-in. ' + error.message;
+      }
+    })();
+  </script>
+  <footer class="wrap site-legal-footer">
+    <p>This independently maintained website is not an official ward website or an official website of The Church of Jesus Christ of Latter-day Saints. It is not sponsored or endorsed by the Church.</p>
+    <nav aria-label="Website policies and contact">
+      <a href="website-terms.html">Terms of Use</a>
+      <a href="website-privacy.html">Privacy Policy</a>
+      <a href="send-a-note-74b2.html">Contact the ward</a>
+    </nav>
+  </footer>
+</body>
+</html>
