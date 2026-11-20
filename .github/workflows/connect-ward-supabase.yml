@@ -1,0 +1,79 @@
+name: Connect Ward Site to Supabase
+on:
+  workflow_dispatch:
+    inputs:
+      project_url:
+        description: 'Supabase Project URL (https://your-project.supabase.co)'
+        required: true
+        type: string
+      publishable_key:
+        description: 'Supabase publishable key (starts with sb_publishable_)'
+        required: true
+        type: string
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: connect-ward-supabase
+  cancel-in-progress: false
+jobs:
+  configure:
+    if: github.repository != 'Mitchell-McCabe/wardsitetemplate'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Validate settings and update config.js
+        env:
+          WARD_SUPABASE_URL: ${{ inputs.project_url }}
+          WARD_SUPABASE_KEY: ${{ inputs.publishable_key }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import re
+
+          url = os.environ['WARD_SUPABASE_URL'].strip().removesuffix('/')
+          key = os.environ['WARD_SUPABASE_KEY'].strip()
+          if not re.fullmatch(r'https://[a-z0-9]+\.supabase\.co', url):
+              raise SystemExit('Paste the Supabase Project URL from Connect, without /rest/v1.')
+          if not re.fullmatch(r'sb_publishable_[A-Za-z0-9_-]+', key):
+              raise SystemExit('Paste the browser publishable key. It must start with sb_publishable_.')
+
+          path = Path('config.js')
+          config = path.read_text(encoding='utf-8')
+          for name, value in {'supabaseUrl': url, 'supabaseAnonKey': key}.items():
+              pattern = rf'^([ \t]*{name}:[ \t]*)(?:\x27[^\x27\r\n]*\x27|"[^"\r\n]*")([ \t]*,[ \t]*(?://[^\r\n]*)?)$'
+              config, count = re.subn(pattern, lambda match: match[1] + json.dumps(value) + match[2], config, flags=re.M)
+              if count != 1:
+                  raise SystemExit(f'Could not find exactly one {name} field in config.js.')
+          path.write_text(config, encoding='utf-8')
+          PY
+          node --check config.js
+      - name: Open setup pull request
+        env:
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- config.js; then
+            echo 'config.js already has these settings.'
+            exit 0
+          fi
+          pending="$(gh pr list --state open --base "$BASE_BRANCH" --json headRefName,url --jq '.[] | select(.headRefName | startswith("ward-supabase-setup/")) | .url')"
+          if [[ -n "$pending" ]]; then
+            echo "::error::Merge or close the existing Supabase setup pull request first: $pending"
+            exit 1
+          fi
+          branch="ward-supabase-setup/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          git switch -c "$branch"
+          git add -- config.js
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m 'Connect ward site to Supabase'
+          git push origin "HEAD:refs/heads/$branch"
+          url="$(gh pr create --base "$BASE_BRANCH" --head "$branch" \
+            --title 'Connect ward site to Supabase' \
+            --body 'This configures the Project URL and browser publishable key. Merge to connect the site. Install the ward database schema before testing forms.')"
+          printf '### Supabase setup is ready to merge\n\n[Open the setup pull request](%s)\n' "$url" >> "$GITHUB_STEP_SUMMARY"
