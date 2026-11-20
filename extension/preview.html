@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ward Sync V2</title><link rel="stylesheet" href="preview.css"></head><body><main>
+<header><img src="icons/icon48.png" alt=""><h1>Ward Sync V2</h1></header>
+<p class="intro">Sign in to the intended ward in LCR and unlock Leaders. Keep this extension page open while it works.</p>
+<section><h2>Import to Leaders</h2><div id="choices"></div><p><button id="sync">Import selected reports</button></p><ol id="log" aria-live="polite"></ol></section>
+<section><h2>Send attendance to LCR</h2><p>Leave the date blank to skip attendance export.</p><label>Sunday to export <input type="date" id="date" step="7" min="1970-01-04"></label> <button id="preview" disabled>Preview pending check-ins</button><p id="status" role="status"></p><ul id="matches"></ul><button id="send" disabled>Mark reviewed check-ins present</button></section>
+</main><script type="module" src="app.js"></script></body></html>
